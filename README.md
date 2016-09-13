@@ -1,4 +1,5 @@
 # Using the tools
+
 To use these scripts, you'll need a 3D, or other source of initial data. Once you have that, you'll want to use the `replace_bp.py` script to replace the blocks zip file portion of a blueprint. Included is a simple blueprint file that is a suitable surrogate for the new blocks.
 
 - Generate a collection of points in 3D space with integer coordinates (see `Sphere.csv`)
@@ -13,6 +14,11 @@ To use these scripts, you'll need a 3D, or other source of initial data. Once yo
 - Once the script completes, copy the folder containing the modified BP into the `Saves/Blueprints/<SteamID>` folder, and spawn it in game.
   - The game only loads the Blueprint collection when you join a game, so if you are currently in a game you will have to exit the game then rejoin/load a game.
   - When saving blueprints inside of a game, the changes are immediately reflected on disk, so no leave/load steps need to be performed for simply inspecting/copying the Blueprints created in-game.
+
+## Environment
+These scripts rely on some command line Linux knowledge and capability. They will run fine under the Windows X bash/Subsystem for Linux, and any Unix environment.
+
+Example usage: `cat Sphere.csv | python replace_bp.py SingleBlock/SingleBlock.epb`
 
 ## `msh_to_stl.py`
 Example usage: `cat mesh.msh | python msh_to_stl.py > mesh.stl`
