@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+# More complex script that convers locations in 3D space into a Blueprint
+# dense filled matrix/block types.
+#
+# For now, only a Steel cube block is used.
+
 import sys
 import math
 import struct

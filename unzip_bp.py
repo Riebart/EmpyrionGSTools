@@ -1,8 +1,17 @@
 #!/usr/bin/env python
 
+# Simple script that takes a blueprint (.epb) filename as an argument, and
+# prints out the contents of the block sections.
+#
+# Most useful for debugging/exploring 
+
 import sys
 import StringIO
 import zipfile
+
+if len(sys.argv)< 2:
+    echo "Usage: unzip_bp.py <Blueprint filename>"
+    exit(1)
 
 with open(sys.argv[1],'r') as fp:
     bp = fp.read()
