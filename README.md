@@ -31,6 +31,7 @@ Example usage: `cat mesh.msh | python msh_to_stl.py > mesh.stl`
   - Recommended finest resolution: 1
   - Recommended dimension remap: 1,2,3
 - Andromeda Ascendant: https://www.cgtrader.com/free-3d-models/vehicle/sci-fi/the-andromeda-ascendant
+  - NOTE: This is provided in binary STL format, which is not supported by the `stl_to_pts.py` script.
   - Recommended finest resolution: 10
   - Recommended dimension remap: 1,3,2
 - Nostromo: http://www.thingiverse.com/thing:418367

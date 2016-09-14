@@ -5,6 +5,23 @@ import json
 import math
 import time
 
+class Triple(object):
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def __getitem__(self, i):
+        if i == 0:
+            return self.x
+        if i == 1:
+            return self.y
+        if i == 2:
+            return self.z
+    
+    def __str__(self):
+        return "<%s,%s,%s>" % (str(self.x), str(self.y), str(self.z))
+
 def solid_to_triangles(fp):
     """
     Convert a single 'solid' section of an STL file into triangles.
@@ -29,12 +46,12 @@ def solid_to_triangles(fp):
         # Otherwise, if it's a vertex line (skipping the loop/endloop lines
         # completely)
         elif l.strip().startswith("vertex"):
-            x = [ float(i) for i in l.strip().split(" ")[1:]]
+            x = Triple(*[ float(i) for i in l.strip().split(" ")[1:]])
             l = fp.readline()
-            y = [ float(i) for i in l.strip().split(" ")[1:]]
+            y = Triple(*[ float(i) for i in l.strip().split(" ")[1:]])
             l = fp.readline()
-            z = [ float(i) for i in l.strip().split(" ")[1:]]
-            tris.append([x,y,z])
+            z = Triple(*[ float(i) for i in l.strip().split(" ")[1:]])
+            tris.append(Triple(x,y,z))
     return (name, tris)
 
 def stl_to_triangles(fp):
@@ -57,54 +74,62 @@ def vsub(u, v):
     """
     Vector subtraction.
     """
-    return tuple([i-j for i,j in zip(u,v)])
+    return Triple(u.x-v.x,u.y-v.y,u.z-v.z)
+    #return tuple([i-j for i,j in zip(u,v)])
 
 def l2_norm(v):
-    return math.sqrt(sum([i*i for i in v]))
+    return math.sqrt(v.x*v.x+v.y*v.y+v.z*v.z)
+    #return math.sqrt(sum([i*i for i in v]))
 
 def max_edge_norm(Tri):
     """
     Given an triangle, find length of the longest edge.
     """
-    return max([
-        l2_norm(vsub(Tri[0], Tri[1])),
-        l2_norm(vsub(Tri[1], Tri[2])),
-        l2_norm(vsub(Tri[0], Tri[2]))
-    ])
+    return max(
+        l2_norm(vsub(Tri.x, Tri.y)),
+        l2_norm(vsub(Tri.y, Tri.z)),
+        l2_norm(vsub(Tri.x, Tri.z))
+    )
 
 def mean(v):
     """
-    Find the mean of all elements of a vector.
+    Find the mean of all elements of a triple.
     """
     if len(v) > 0:
-        return sum(v) / len(v)
+        return (v.x+v.y+v.z) / 3.0
     else:
         raise ValueError('Cannot compute mean of zero-length vector.')
 
-def vmean(Pts):
-    """
-    Given a 2D matrix in row-major form, compute the mean along each column.  
-    No distinction is made between row and columns, but the mean is computed along
-    the minor dimension, so the row/column language is used as a convenience.
-    """
-    return [mean([ p[i] for p in Pts ]) for i in range(len(Pts[0]))]
+def vmean2(P1, P2):
+    return Triple(
+        (P1.x+P2.x)/2.0,
+        (P1.y+P2.y)/2.0,
+        (P1.z+P2.z)/2.0
+    )
+
+def vmean3(P1, P2, P3):
+    return Triple(
+        (P1.x+P2.x+P3.x)/3.0,
+        (P1.y+P2.y+P3.y)/3.0,
+        (P1.z+P2.z+P3.z)/3.0
+    )
 
 def hexsect_tri(Tri):
     """
     Given a triangle, partition it into six new triangles using the midpoints
     of each edge and the centroid as new vertices.
     """
-    centroid = vmean(Tri)
-    mp1 = vmean([Tri[0], Tri[1]])
-    mp2 = vmean([Tri[0], Tri[2]])
-    mp3 = vmean([Tri[1], Tri[2]])
+    centroid = vmean3(Tri.x, Tri.y, Tri.z)
+    mp1 = vmean2(Tri.x, Tri.y)
+    mp2 = vmean2(Tri.x, Tri.z)
+    mp3 = vmean2(Tri.y, Tri.z)
     return [
-        [Tri[0], mp1, centroid],
-        [mp1, Tri[1], centroid],
-        [Tri[0], mp2, centroid],
-        [mp2, Tri[2], centroid],
-        [Tri[1], mp3, centroid],
-        [mp3, Tri[2], centroid],
+        Triple(Tri.x, mp1, centroid),
+        Triple(mp1, Tri.y, centroid),
+        Triple(Tri.x, mp2, centroid),
+        Triple(mp2, Tri.z, centroid),
+        Triple(Tri.y, mp3, centroid),
+        Triple(mp3, Tri.z, centroid),
     ]
 
 def split_tri(Tri, Resolution):
@@ -136,7 +161,11 @@ def rescale_round_point(Point, Resolution):
 
     Returned as a tuple for use in a set() for reduction to unique points only.
     """
-    return tuple([ int(round(p / Resolution)) for p in Point ])
+    return (
+        int(round(Point.x / Resolution)),
+        int(round(Point.y / Resolution)),
+        int(round(Point.z / Resolution))
+    )
 
 def split_tris(Primitives, Resolution, BatchSize=100):
     """
@@ -161,12 +190,12 @@ def split_tris(Primitives, Resolution, BatchSize=100):
             pts = list(set(pts))
             tris = []
     
-    #One final round of flatten/union
+    # One final round of flatten/union
     pts.extend([ rescale_round_point(t[i], Resolution) for i in range(3) for t in tris ])
     pts = list(set(pts))
 
     # LEGACY: Super slow on pypy (2x CPython), included for posterity and entertainment.
-    # pts = list(set([ rescale_round_point(t[i], Resolution) for i in range(3) for t in tris ]))
+    #pts = list(set([ rescale_round_point(t[i], Resolution) for i in range(3) for t in tris ]))
     return pts
 
 if len(sys.argv) < 3:
@@ -177,6 +206,8 @@ t0 = time.time()
 # Convert the STL to a list of triangles. 
 with open(sys.argv[1],'r') as fp:
     tris = stl_to_triangles(fp)
+
+sys.stderr.write("Identified %d triangles in the STL file.\n" % len(tris))
 
 # Convert the polygonal representation of a 2D surface in 3D space into
 # a cloud of points where no point is more than the given resolution away

@@ -61,6 +61,18 @@ def bounding_box(positions):
 
 def generate_blocks(positions):
     # The string used for each block, corresponds to a steel cube.
+    # The four bytes are (in order):
+    # - Block type
+    #  > 0x87 = Steel
+    #  > 0x8a = Hardened Steel
+    # - Rotation
+    #  > 0x01 = Default
+    #  > 0x19 = ???
+    # - 0x00 ???
+    # - Blocktype variant
+    #  > 0x14 = Slope 1:1 Full
+    #  > 0x12 = Slope 1:2 Top Full
+    #  > 0x10 = Slope 1:2 Bottom Full
     block_string = "\x87\x01\x00\x00"
 
     # Step 1: Figure out how big the bounding box is, calculate the two opposing corners.
