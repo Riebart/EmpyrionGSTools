@@ -10,6 +10,7 @@ import math
 import struct
 import StringIO
 import zipfile
+import argparse
 
 def dbm_bitmask(dbm):
     bm = []
@@ -32,7 +33,8 @@ def dbm_bitmask(dbm):
                     bm.append(cm)
                     cb = 1
                     cm = 0
-    bm.append(cm)
+    if cb > 1:
+        bm.append(cm)
     return bm
 
 def sparse_to_dense(positions, l, w, h):
@@ -57,12 +59,9 @@ def bounding_box(positions):
     M = [ max([p[i] for p in positions]) for i in range(3) ]
     return (m, M)
 
-def generate_blocks(positions_csv):
+def generate_blocks(positions):
     # The string used for each block, corresponds to a steel cube.
     block_string = "\x87\x01\x00\x00"
-
-    # Step 0: Convert the CSV to the array
-    positions = [ [ int(float(i)) for i in l.strip().split(",") ] for l in positions_csv.strip().split("\n") ]
 
     # Step 1: Figure out how big the bounding box is, calculate the two opposing corners.
     m, M = bounding_box(positions)
@@ -73,13 +72,13 @@ def generate_blocks(positions_csv):
     length += 1
     width += 1
     height += 1
-    sys.stderr.write("%d %d %d\n" % (length, width, height))
+    sys.stderr.write("Dimensions of resulting blueprint: %d %d %d\n" % (length, width, height))
     positions = [ list_subtract(p, m) for p in positions ]
     #sys.stderr.write(repr(positions) + "\n")
 
     # Step 3: Now that we have the size of the object, calculate the header
     n_hdr_bytes = int(math.ceil(length * width * height / 8.0))
-    sys.stderr.write("%d\n" % n_hdr_bytes)
+    sys.stderr.write("Model requires %d header bytes\n" % n_hdr_bytes)
     output = struct.pack("<L", n_hdr_bytes)
 
     # Step 3: Given the positions of the blocks, derive the cuboid-filling bit mask
@@ -104,13 +103,24 @@ def generate_blocks(positions_csv):
     #sys.stderr.write(output.encode("hex") + "\n")
     return (output, length, width, height)
 
-bp_filename = sys.argv[1]
-#length, width, height = sys.argv[2:5]
+def csv_to_array(csv):
+    return [ [ int(float(i)) for i in l.strip().split(",") ] for l in csv.strip().split("\n") ]
 
-with open(bp_filename,'r') as fp:
+parser = argparse.ArgumentParser(description="Given an input CSV of coordinates, modify a Blueprint to transplant the blocks into.")
+parser.add_argument("--blueprint-file", required=True, help="Filename of the blueprint file to modify.")
+parser.add_argument("--dimension-remap", required=False, default="1,2,3", help="A permutation of 1,2,3 to remap the coordinates. Example: 1,3,2")
+
+pargs = parser.parse_args()
+
+with open(pargs.blueprint_file,'r') as fp:
     bp = fp.read()
 
-new_blocks, length, width, height = generate_blocks(sys.stdin.read())
+positions = csv_to_array(sys.stdin.read())
+if pargs.dimension_remap != None:
+    remap = [ int(i)-1 for i in pargs.dimension_remap.split(",") ]
+    positions = [ tuple([p[remap[i]] for i in range(3)]) for p in positions ]
+
+new_blocks, length, width, height = generate_blocks(positions)
 
 sso = StringIO.StringIO()
 zf = zipfile.ZipFile(sso, 'w', zipfile.ZIP_DEFLATED)
@@ -132,5 +142,7 @@ bp[21:bp.rfind('\x03\x04\x14\x00\x00\x00\x08\x00')] + \
 new_zip
 
 #sys.stdout.write(new_bp)
-with open(bp_filename,'w') as fp:
+with open(pargs.blueprint_file,'w') as fp:
     fp.write(new_bp)
+    fp.flush()
+    fp.close()

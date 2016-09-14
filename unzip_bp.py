@@ -9,8 +9,8 @@ import sys
 import StringIO
 import zipfile
 
-if len(sys.argv)< 2:
-    echo "Usage: unzip_bp.py <Blueprint filename>"
+if len(sys.argv) < 2:
+    print "Usage: unzip_bp.py <Blueprint filename>"
     exit(1)
 
 with open(sys.argv[1],'r') as fp:

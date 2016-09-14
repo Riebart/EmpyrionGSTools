@@ -25,8 +25,14 @@ Example usage: `cat mesh.msh | python msh_to_stl.py > mesh.stl`
 
 # Model Sources
 - Megathron: http://www.thingiverse.com/thing:89260
+  - Recommended finest resolution: 1
+  - Recommended dimension remap: 1,3,2
 - ThunderForge: http://francophone.dansteph.com/?page=addon&id=15
-- Andromeda Ascendant: ???
+  - Recommended finest resolution: 1
+  - Recommended dimension remap: 1,2,3
+- Andromeda Ascendant: https://www.cgtrader.com/free-3d-models/vehicle/sci-fi/the-andromeda-ascendant
+  - Recommended finest resolution: 10
+  - Recommended dimension remap: 1,3,2
 
 # References
 - `.msh` file format reference: http://3dcenter.ru/forum/index.php?act=attach&type=post&id=171261
