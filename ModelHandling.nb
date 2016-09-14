@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       158,          7]
-NotebookDataLength[     33535,        806]
-NotebookOptionsPosition[     32107,        758]
-NotebookOutlinePosition[     32482,        774]
-CellTagsIndexPosition[     32439,        771]
+NotebookDataLength[     32956,        804]
+NotebookOptionsPosition[     31529,        756]
+NotebookOutlinePosition[     31904,        772]
+CellTagsIndexPosition[     31861,        769]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -39,13 +39,17 @@ Cell[BoxData[{
  RowBox[{
   RowBox[{"AndromedaAscendantModel", "=", 
    RowBox[{"Import", "[", "\"\<AndromedaAscendant.stl\>\"", "]"}]}], 
-  ";"}]}], "Input",
+  ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"NostromoModel", "=", 
+   RowBox[{"Import", "[", "\"\<Nostromo.stl\>\"", "]"}]}], ";"}]}], "Input",
  InitializationCell->True,
  CellChangeTimes->{{3.6823701402675858`*^9, 3.682370150977635*^9}, {
   3.682426544615112*^9, 3.6824265463021574`*^9}, {3.682730304429229*^9, 
   3.682730304926832*^9}, {3.6827653972286253`*^9, 3.6827654075498466`*^9}, {
   3.682774276226319*^9, 3.6827742928217077`*^9}, {3.6827828980283637`*^9, 
-  3.6827829351118994`*^9}, {3.682819139788616*^9, 3.6828191577596035`*^9}}],
+  3.6827829351118994`*^9}, {3.682819139788616*^9, 3.6828191577596035`*^9}, {
+  3.6828554536328316`*^9, 3.6828554645852966`*^9}}],
 
 Cell[CellGroupData[{
 
@@ -690,20 +694,25 @@ Cell[BoxData[{
   RowBox[{"Transpose", "[", 
    RowBox[{
     RowBox[{"MeshPrimitives", "[", 
-     RowBox[{"ThunderforgeModel", ",", "0"}], "]"}], "[", 
+     RowBox[{"MegathronModel", ",", "0"}], "]"}], "[", 
     RowBox[{"[", 
      RowBox[{"All", ",", "1"}], "]"}], "]"}], "]"}]}], "\[IndentingNewLine]", 
  RowBox[{
   RowBox[{
    RowBox[{"MeshPrimitives", "[", 
-    RowBox[{"ThunderforgeModel", ",", "2"}], "]"}], "[", 
+    RowBox[{"MegathronModel", ",", "2"}], "]"}], "[", 
    RowBox[{"[", 
     RowBox[{"All", ",", "1"}], "]"}], "]"}], ";"}], "\[IndentingNewLine]", 
  RowBox[{
-  RowBox[{"Export", "[", 
-   RowBox[{"\"\<Thunderforge.csv\>\"", ",", 
-    RowBox[{"RefinePrimitivesToPoints", "[", 
-     RowBox[{"%", ",", "2", ",", "100"}], "]"}]}], "]"}], "//", 
+  RowBox[{
+   RowBox[{
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"Export", "[", 
+       RowBox[{"\"\<Megathron.csv\>\"", ",", "#"}], "]"}], ",", 
+      RowBox[{"Dimensions", "[", "#", "]"}]}], "}"}], "&"}], "[", 
+   RowBox[{"RefinePrimitivesToPoints", "[", 
+    RowBox[{"%", ",", "1", ",", "100"}], "]"}], "]"}], "//", 
   "AbsoluteTiming"}]}], "Input",
  CellChangeTimes->{{3.6827876599866886`*^9, 3.682787682163417*^9}, {
    3.682789116140926*^9, 3.6827891581051564`*^9}, {3.68280532738768*^9, 
@@ -723,40 +732,29 @@ Cell[BoxData[{
    3.6828191845445557`*^9, 3.6828191965585685`*^9}, {3.682819280812914*^9, 
    3.6828193594880447`*^9}, {3.682819785717121*^9, 3.6828197876342635`*^9}, {
    3.6828198846706324`*^9, 3.6828198849952025`*^9}, {3.6828204328457108`*^9, 
-   3.6828204546977806`*^9}, {3.68282051575379*^9, 3.6828205160077114`*^9}}],
+   3.6828204546977806`*^9}, {3.68282051575379*^9, 3.6828205160077114`*^9}, {
+   3.682855470099143*^9, 3.682855567150779*^9}, {3.682863206912969*^9, 
+   3.6828632477495866`*^9}, {3.68286338914155*^9, 3.6828634389311323`*^9}}],
 
 Cell[BoxData[
  RowBox[{"{", 
   RowBox[{
-  "125.2860107421875`", ",", "87.99258422851562`", ",", 
-   "227.10130310058594`"}], "}"}]], "Output",
- CellChangeTimes->{{3.682808433658024*^9, 3.6828084590999804`*^9}, 
-   3.682809482393159*^9, 3.6828118089476433`*^9, 3.682811841477071*^9, 
-   3.6828125792308636`*^9, {3.6828126447618914`*^9, 3.6828126680763693`*^9}, 
-   3.682813010169015*^9, 3.6828130561532145`*^9, 3.6828133477151594`*^9, 
-   3.682813410781023*^9, 3.6828135919431505`*^9, 3.6828161265734167`*^9, 
-   3.6828187643056183`*^9, 3.6828189254780207`*^9, 3.6828190319357014`*^9, 
-   3.682819203288799*^9, {3.6828192907082815`*^9, 3.6828193599679394`*^9}, 
-   3.6828197908396177`*^9, 3.682819885982128*^9, {3.6828204447870283`*^9, 
-   3.6828204551624546`*^9}, 3.68282051710113*^9}],
+  "198.64295959472656`", ",", "82.71355438232422`", ",", 
+   "72.1378173828125`"}], "}"}]], "Output",
+ CellChangeTimes->{{3.6828634317766223`*^9, 3.6828634395495653`*^9}}],
 
 Cell[BoxData[
  RowBox[{"{", 
-  RowBox[{"13.831943033698927`", ",", "\<\"Thunderforge.csv\"\>"}], 
-  "}"}]], "Output",
- CellChangeTimes->{{3.682808433658024*^9, 3.6828084590999804`*^9}, 
-   3.682809482393159*^9, 3.6828118089476433`*^9, 3.682811841477071*^9, 
-   3.6828125792308636`*^9, {3.6828126447618914`*^9, 3.6828126680763693`*^9}, 
-   3.682813010169015*^9, 3.6828130561532145`*^9, 3.6828133477151594`*^9, 
-   3.682813410781023*^9, 3.6828135919431505`*^9, 3.6828161265734167`*^9, 
-   3.6828187643056183`*^9, 3.6828189254780207`*^9, 3.6828190319357014`*^9, 
-   3.682819203288799*^9, {3.6828192907082815`*^9, 3.6828193599679394`*^9}, 
-   3.6828197908396177`*^9, 3.682819885982128*^9, {3.6828204447870283`*^9, 
-   3.6828204551624546`*^9}, 3.682820530960432*^9}]
+  RowBox[{"4.084557611995884`", ",", 
+   RowBox[{"{", 
+    RowBox[{"\<\"Megathron.csv\"\>", ",", 
+     RowBox[{"{", 
+      RowBox[{"54983", ",", "3"}], "}"}]}], "}"}]}], "}"}]], "Output",
+ CellChangeTimes->{{3.6828634317766223`*^9, 3.6828634436464634`*^9}}]
 }, Open  ]]
 }, Open  ]]
 },
-WindowSize->{1438, 828},
+WindowSize->{1410, 828},
 WindowMargins->{{-7, Automatic}, {Automatic, 0}},
 Magnification:>2. Inherited,
 FrontEndVersion->"10.4 for Microsoft Windows (64-bit) (February 25, 2016)",
@@ -773,39 +771,39 @@ CellTagsIndex->{}
 *)
 (*NotebookFileOutline
 Notebook[{
-Cell[558, 20, 1181, 27, 289, "Input",
+Cell[558, 20, 1367, 31, 352, "Input",
  InitializationCell->True],
 Cell[CellGroupData[{
-Cell[1764, 51, 102, 1, 140, "Section"],
-Cell[1869, 54, 1473, 34, 213, "Input"]
+Cell[1950, 55, 102, 1, 140, "Section"],
+Cell[2055, 58, 1473, 34, 213, "Input"]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[3379, 93, 103, 1, 108, "Section"],
+Cell[3565, 97, 103, 1, 108, "Section"],
 Cell[CellGroupData[{
-Cell[3507, 98, 1777, 32, 632, "Text",
+Cell[3693, 102, 1777, 32, 632, "Text",
  CellGroupingRules->{"GroupTogetherGrouping", 10000.}],
-Cell[5287, 132, 13096, 307, 1613, "Input",
+Cell[5473, 136, 13096, 307, 1613, "Input",
  CellGroupingRules->{"GroupTogetherGrouping", 10000.},
  InitializationCell->True]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[18420, 444, 573, 9, 126, "Text",
+Cell[18606, 448, 573, 9, 126, "Text",
  CellGroupingRules->{"GroupTogetherGrouping", 10001.}],
-Cell[18996, 455, 2643, 65, 619, "Input",
+Cell[19182, 459, 2643, 65, 619, "Input",
  CellGroupingRules->{"GroupTogetherGrouping", 10001.}],
-Cell[21642, 522, 285, 4, 43, "Print",
+Cell[21828, 526, 285, 4, 43, "Print",
  CellGroupingRules->{"GroupTogetherGrouping", 10001.}],
-Cell[21930, 528, 2184, 51, 267, "Output",
+Cell[22116, 532, 2184, 51, 267, "Output",
  CellGroupingRules->{"GroupTogetherGrouping", 10001.}]
 }, Closed]],
 Cell[CellGroupData[{
-Cell[24151, 584, 3337, 77, 349, "Input"],
-Cell[27491, 663, 756, 15, 84, "Output"]
+Cell[24337, 588, 3337, 77, 349, "Input"],
+Cell[27677, 667, 756, 15, 84, "Output"]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[28284, 683, 2243, 42, 200, "Input"],
-Cell[30530, 727, 785, 13, 84, "Output"],
-Cell[31318, 742, 761, 12, 84, "Output"]
+Cell[28470, 687, 2528, 49, 200, "Input"],
+Cell[31001, 738, 211, 5, 84, "Output"],
+Cell[31215, 745, 286, 7, 84, "Output"]
 }, Open  ]]
 }, Open  ]]
 }
