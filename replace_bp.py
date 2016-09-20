@@ -13,6 +13,7 @@ import zipfile
 import argparse
 
 def dbm_bitmask(dbm):
+    block_strings = ""
     bm = []
 
     # Current mask, and the bit being twiddled.
@@ -26,8 +27,13 @@ def dbm_bitmask(dbm):
             y = x[j]
             for k in range(len(y)):
                 z = y[k]
-                #sys.stderr.write("%d %d %d " % (i,j,k) + str(z) + "\n")
-                cm += z * cb
+                if z != False:
+                    #block_strings += "\x87\x01\x00\x00"
+                    block_strings += "\x87" + \
+                                     (chr(z[1]) if len(z) > 1 else chr(1)) + \
+                                     chr(0) + \
+                                     (chr(z[0]) if len(z) > 0 else chr(0))
+                    cm += cb
                 cb *= 2
                 if cb > 128:
                     bm.append(cm)
@@ -35,20 +41,20 @@ def dbm_bitmask(dbm):
                     cm = 0
     if cb > 1:
         bm.append(cm)
-    return bm
+    return (bm, block_strings)
 
-def sparse_to_dense(positions, l, w, h):
+def sparse_to_dense(positions, meta, l, w, h):
+    # Map the numeric axes, in terms of the major-ordering of the arrays, to the named axes
     Z = (l,0)
     Y = (w,1)
     X = (h,2)
 
     a = [[[False for z in range(Z[0])] for y in range(Y[0])] for x in range(X[0])]
 
-    for p in positions:
+    for p, m in zip(positions, meta):
         P = [p[X[1]], p[Y[1]], p[Z[1]]]
-        a[P[0]][P[1]][P[2]] = True
+        a[P[0]][P[1]][P[2]] = m
 
-    #sys.stderr.write(repr(a) + "\n")
     return a
 
 def list_subtract(l1, l2):
@@ -59,21 +65,47 @@ def bounding_box(positions):
     M = [ max([p[i] for p in positions]) for i in range(3) ]
     return (m, M)
 
-def generate_blocks(positions):
+def generate_blocks(positions, meta):
     # The string used for each block, corresponds to a steel cube.
     # The four bytes are (in order):
     # - Block type
     #  > 0x87 = Steel
     #  > 0x8a = Hardened Steel
-    # - Rotation
-    #  > 0x01 = Default
-    #  > 0x19 = ???
+    # - Rotation (Code, Forward, Up) with vectors as (x, y, z)
+    #  > 0x01, +y, +z
+    #  > 0x09, +x, +z
+    #  > 0x11, -y, +z
+    #  > 0x19, -x, +z
+    #  > 0x21, +y, +x
+    #  > 0x29, +z, +x
+    #  > 0x31, -y, +x
+    #  > 0x39, -z, +x
+    #  > 0x41, -y, -z
+    #  > 0x49, -x, -z
+    #  > 0x51, +y, -z
+    #  > 0x59, +x, -z
+    #  > 0x61, +y, -x
+    #  > 0x69, +z, -x
+    #  > 0x71, -y, -x
+    #  > 0x79, -z, -x
+    #  > 0x81, +z, -y
+    #  > 0x89, +x, -y
+    #  > 0x91, -z, -y
+    #  > 0x99, -x, -y
+    #  > 0xA1, -x, +y
+    #  > 0xA9, -z, +y
+    #  > 0xB1, +x, +y
+    #  > 0xB9, +z, +y
     # - 0x00 ???
     # - Blocktype variant
-    #  > 0x14 = Slope 1:1 Full
-    #  > 0x12 = Slope 1:2 Top Full
-    #  > 0x10 = Slope 1:2 Bottom Full
-    block_string = "\x87\x01\x00\x00"
+    #  > 0x14 = Slope 1:1 Solid
+    #  > 0x12 = Slope 1:2 Top Solid
+    #  > 0x10 = Slope 1:2 Bottom Solid
+    #  > 0x00 = Full Cube
+    block_type = "\x87"
+    block_rotation = "\x01"
+    block_shape = "\x00"
+    #block_string = "\x87\x01\x00\x00"
 
     # Step 1: Figure out how big the bounding box is, calculate the two opposing corners.
     m, M = bounding_box(positions)
@@ -97,12 +129,20 @@ def generate_blocks(positions):
     # for block/space. This is equivalent to convert a sparse 1-0 matrix to a dense matrix
     #
     # This just returns a dense True/False matrix, which needs to be serialized into a bitmask.
-    dense_boolean_matrix = sparse_to_dense(positions, length, width, height)
-    bm_list = dbm_bitmask(dense_boolean_matrix)
+    dense_boolean_matrix = sparse_to_dense(positions, meta, length, width, height)
+    bm_list, block_strings = dbm_bitmask(dense_boolean_matrix)
     output += "".join([struct.pack('B', bm) for bm in bm_list])
+    set_bits = 0
+    for b in bm_list:
+        for i in range(8):
+            if b & (1<<i):
+                set_bits += 1
+    print "%d bits set in header bytes for %d blocks." % (set_bits, len(positions))
 
     # Step 4: Fill in the body/footer with steel blocks and whatever the footer represents.
-    output += len(positions) * block_string
+    # We need to build a mapping of positions to order to look up the positions and
+    # place the right block at the right positions in the Blueprint.
+    output += block_strings
 
     # Step 5: Fill in the footer, which we'll just ignore ... ???
     # There are four 'section', each with the same format as the block type header,
@@ -128,11 +168,14 @@ with open(pargs.blueprint_file,'r') as fp:
     bp = fp.read()
 
 positions = csv_to_array(sys.stdin.read())
+
 if pargs.dimension_remap != None:
     remap = [ int(i)-1 for i in pargs.dimension_remap.split(",") ]
-    positions = [ tuple([p[remap[i]] for i in range(3)]) for p in positions ]
+    remap.extend([3,4])
+    positions = [ tuple([p[remap[i]] for i in range(min(5,len(p)))]) for p in positions ]
 
-new_blocks, length, width, height = generate_blocks(positions)
+new_blocks, length, width, height = generate_blocks([tuple(p[:3]) for p in positions],
+                                                    [tuple(p[3:]) for p in positions])
 
 sso = StringIO.StringIO()
 zf = zipfile.ZipFile(sso, 'w', zipfile.ZIP_DEFLATED)
