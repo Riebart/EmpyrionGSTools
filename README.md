@@ -37,6 +37,8 @@ Example usage: `cat mesh.msh | python msh_to_stl.py > mesh.stl`
 - Nostromo: http://www.thingiverse.com/thing:418367
   - Recommended finest resolution: 150
   - Recommended dimension remap: 1,3,2
+- Bentusi Harbour Ship: https://www.tinkercad.com/things/bqqIfyfBCOj-homeworld-the-great-harbor-ship-bentus
+  - Recommended dimension remap: 1,3,2
 
 # References
 - `.msh` file format reference: http://3dcenter.ru/forum/index.php?act=attach&type=post&id=171261
