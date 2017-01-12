@@ -6,8 +6,7 @@ or a Lambda event body, and performs the necessary functions.
 import base64
 import StringIO
 
-import stl_to_pts
-import replace_bp
+import empyrion
 
 def lambda_handler(Event, Context):
     """
@@ -15,7 +14,7 @@ def lambda_handler(Event, Context):
     based on the parameters.
     """
     stl_body = base64.b64decode(Event['STLBody'])
-    voxel_dimension = int(Event['BlueprintSize']) if 'BlueprintSize' in Event else 100
+    voxel_dimension = int(Event['BlueprintSize']) if 'BlueprintSize' in Event else 25
     dim_remap = Event['DimensionRemap'] if 'DimensionRemap' in Event else [1, 2, 3]
     bp_class = Event['BlueprintClass'] if 'BlueprintClass' in Event else 'SV'
 
@@ -23,21 +22,21 @@ def lambda_handler(Event, Context):
         bp_body = fp.read()
 
     ssi = StringIO.StringIO(stl_body)
-    solids = stl_to_pts.STLFile.read_solids(ssi)
+    solids = empyrion.STLFile.read_solids(ssi)
     triangles = [e for s in solids for e in s[1]]
-    bounds = stl_to_pts.triangle_list_bounds(triangles)
+    bounds = empyrion.triangle_list_bounds(triangles)
     longest_dim = max([i[1]-i[0] for i in bounds])
     resolution = longest_dim / float(voxel_dimension)
-    pts = stl_to_pts.parallel_split_tris(triangles, resolution)
+    pts = empyrion.parallel_split_tris(triangles, resolution)
 
     pts = [
         tuple([p[dim_remap[i]-1] for i in range(3)]) for p in pts
     ]
 
-    smoothed_pts = stl_to_pts.smooth_pts(pts)
-    mapped_blocks = stl_to_pts.map_to_empyrion_codes(smoothed_pts)
+    smoothed_pts = empyrion.smooth_pts(pts)
+    mapped_blocks = empyrion.map_to_empyrion_codes(smoothed_pts)
 
-    new_bp = replace_bp.build_new_bp(bp_body, mapped_blocks, bp_class)
+    new_bp = empyrion.build_new_bp(bp_body, mapped_blocks, bp_class)
 
     return base64.b64encode(new_bp)
 
@@ -54,6 +53,12 @@ if __name__ == "__main__":
             description="Given an input CSV of coordinates, modify a Blueprint to match the blocks."
         )
         parser.add_argument(
+            "--blueprint-size",
+            required=False,
+            default=25,
+            type=int,
+            help="A permutation of 1,2,3 to remap the coordinates. Example: 1,3,2")
+        parser.add_argument(
             "--dimension-remap",
             required=False,
             default="1,2,3",
@@ -67,6 +72,7 @@ if __name__ == "__main__":
         lambda_body = {
             'STLBody': base64.b64encode(input_data),
             'DimensionRemap': [int(d) for d in pargs.dimension_remap.split(",")],
+            'BlueprintSize': pargs.blueprint_size if pargs.blueprint_size > 0 else 25,
             'BlueprintClass': pargs.blueprint_class if
                               pargs.blueprint_class in ['HV', 'SV', 'CV', 'BA'] else 'SV'
             }
