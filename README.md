@@ -1,3 +1,32 @@
+# Example
+ The simplest invocation uses default values.
+ 
+ ```
+ cat Machriel.stl | python lambda_index.py > blueprint.epb
+ ```
+
+ To see all invocation options, use `--help`:
+
+ ```
+$ python lambda_index.py --help
+usage: lambda_index.py [-h] [--blueprint-size BLUEPRINT_SIZE]
+                       [--dimension-remap DIMENSION_REMAP]
+                       [--blueprint-class BLUEPRINT_CLASS]
+
+Given an input CSV of coordinates, modify a Blueprint to match the blocks.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --blueprint-size BLUEPRINT_SIZE
+                        Number of blocks (on the longest dimension) to use in
+                        the resulting Blueprint resolution.
+  --dimension-remap DIMENSION_REMAP
+                        A permutation of 1,2,3 to remap the coordinates.
+                        Example: 1,3,2
+  --blueprint-class BLUEPRINT_CLASS
+                        The class (CV, HV, SV, BA) of the blueprint.
+ ```
+
 # Using the tools
 
 To use these scripts, you'll need a 3D, or other source of initial data. Once you have that, you'll want to use the `replace_bp.py` script to replace the blocks zip file portion of a blueprint. Included is a simple blueprint file that is a suitable surrogate for the new blocks.
@@ -14,11 +43,6 @@ To use these scripts, you'll need a 3D, or other source of initial data. Once yo
 - Once the script completes, copy the folder containing the modified BP into the `Saves/Blueprints/<SteamID>` folder, and spawn it in game.
   - The game only loads the Blueprint collection when you join a game, so if you are currently in a game you will have to exit the game then rejoin/load a game.
   - When saving blueprints inside of a game, the changes are immediately reflected on disk, so no leave/load steps need to be performed for simply inspecting/copying the Blueprints created in-game.
-
-# Example
- ```
- python stl_to_pts.py Machriel.stl 100 | python replace_bp.py --blueprint-file /cygdrive/c/Program\ Files\ \(x86\)/Steam/steamapps/common/Empyrion\ -\ Galactic\ Survival/Saves/Blueprints/2847197978373946/SingleBlock_0/SingleBlock_0.epb --blueprint-class CV
- ```
 
 ## Environment
 These scripts rely on some command line Linux knowledge and capability. They will run fine under the Windows X bash/Subsystem for Linux, and any Unix environment.
