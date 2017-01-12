@@ -12,6 +12,7 @@ import StringIO
 import zipfile
 import argparse
 
+
 def dbm_bitmask(dbm):
     block_strings = ""
     bm = []
@@ -43,13 +44,15 @@ def dbm_bitmask(dbm):
         bm.append(cm)
     return (bm, block_strings)
 
+
 def sparse_to_dense(positions, meta, l, w, h):
     # Map the numeric axes, in terms of the major-ordering of the arrays, to the named axes
-    Z = (l,0)
-    Y = (w,1)
-    X = (h,2)
+    Z = (l, 0)
+    Y = (w, 1)
+    X = (h, 2)
 
-    a = [[[False for z in range(Z[0])] for y in range(Y[0])] for x in range(X[0])]
+    a = [[[False for z in range(Z[0])] for y in range(Y[0])]
+         for x in range(X[0])]
 
     for p, m in zip(positions, meta):
         P = [p[X[1]], p[Y[1]], p[Z[1]]]
@@ -57,13 +60,16 @@ def sparse_to_dense(positions, meta, l, w, h):
 
     return a
 
+
 def list_subtract(l1, l2):
-    return [ l1[i] - l2[i] for i in range(len(l1)) ]
+    return [l1[i] - l2[i] for i in range(len(l1))]
+
 
 def bounding_box(positions):
-    m = [ min([p[i] for p in positions]) for i in range(3) ]
-    M = [ max([p[i] for p in positions]) for i in range(3) ]
+    m = [min([p[i] for p in positions]) for i in range(3)]
+    M = [max([p[i] for p in positions]) for i in range(3)]
     return (m, M)
+
 
 def generate_blocks(positions, meta):
     # The string used for each block, corresponds to a steel cube.
@@ -116,8 +122,9 @@ def generate_blocks(positions, meta):
     length += 1
     width += 1
     height += 1
-    sys.stderr.write("Dimensions of resulting blueprint: %d %d %d\n" % (length, width, height))
-    positions = [ list_subtract(p, m) for p in positions ]
+    sys.stderr.write("Dimensions of resulting blueprint: %d %d %d\n" %
+                     (length, width, height))
+    positions = [list_subtract(p, m) for p in positions]
     #sys.stderr.write(repr(positions) + "\n")
 
     # Step 3: Now that we have the size of the object, calculate the header
@@ -129,15 +136,17 @@ def generate_blocks(positions, meta):
     # for block/space. This is equivalent to convert a sparse 1-0 matrix to a dense matrix
     #
     # This just returns a dense True/False matrix, which needs to be serialized into a bitmask.
-    dense_boolean_matrix = sparse_to_dense(positions, meta, length, width, height)
+    dense_boolean_matrix = sparse_to_dense(positions, meta, length, width,
+                                           height)
     bm_list, block_strings = dbm_bitmask(dense_boolean_matrix)
     output += "".join([struct.pack('B', bm) for bm in bm_list])
     set_bits = 0
     for b in bm_list:
         for i in range(8):
-            if b & (1<<i):
+            if b & (1 << i):
                 set_bits += 1
-    print "%d bits set in header bytes for %d blocks." % (set_bits, len(positions))
+    print "%d bits set in header bytes for %d blocks." % (set_bits,
+                                                          len(positions))
 
     # Step 4: Fill in the body/footer with steel blocks and whatever the footer represents.
     # We need to build a mapping of positions to order to look up the positions and
@@ -155,31 +164,56 @@ def generate_blocks(positions, meta):
     #sys.stderr.write(output.encode("hex") + "\n")
     return (output, length, width, height)
 
-def csv_to_array(csv):
-    return [ [ int(float(i)) for i in l.strip().split(",") ] for l in csv.strip().split("\n") ]
 
-parser = argparse.ArgumentParser(description="Given an input CSV of coordinates, modify a Blueprint to transplant the blocks into.")
-parser.add_argument("--blueprint-file", required=True, help="Filename of the blueprint file to modify.")
-parser.add_argument("--dimension-remap", required=False, default="1,2,3", help="A permutation of 1,2,3 to remap the coordinates. Example: 1,3,2")
+def csv_to_array(csv):
+    return [[int(float(i)) for i in l.strip().split(",")]
+            for l in csv.strip().split("\n")]
+
+
+parser = argparse.ArgumentParser(
+    description="Given an input CSV of coordinates, modify a Blueprint to transplant the blocks into."
+)
+parser.add_argument(
+    "--blueprint-file",
+    required=True,
+    help="Filename of the blueprint file to modify.")
+parser.add_argument(
+    "--dimension-remap",
+    required=False,
+    default="1,2,3",
+    help="A permutation of 1,2,3 to remap the coordinates. Example: 1,3,2")
+parser.add_argument(
+    "--blueprint-class",
+    required=False,
+    default=None,
+    help="The class (CV, HV, SV, BA) of the blueprint.")
+blueprint_class_mapping = {
+    "CV": chr(8),
+    "BA": chr(2),
+    "HV": chr(16),
+    "SV": chr(4)
+}
 
 pargs = parser.parse_args()
 
-with open(pargs.blueprint_file,'r') as fp:
+with open(pargs.blueprint_file, 'r') as fp:
     bp = fp.read()
 
 positions = csv_to_array(sys.stdin.read())
 
 if pargs.dimension_remap != None:
-    remap = [ int(i)-1 for i in pargs.dimension_remap.split(",") ]
-    remap.extend([3,4])
-    positions = [ tuple([p[remap[i]] for i in range(min(5,len(p)))]) for p in positions ]
+    remap = [int(i) - 1 for i in pargs.dimension_remap.split(",")]
+    remap.extend([3, 4])
+    positions = [
+        tuple([p[remap[i]] for i in range(min(5, len(p)))]) for p in positions
+    ]
 
-new_blocks, length, width, height = generate_blocks([tuple(p[:3]) for p in positions],
-                                                    [tuple(p[3:]) for p in positions])
+new_blocks, length, width, height = generate_blocks(
+    [tuple(p[:3]) for p in positions], [tuple(p[3:]) for p in positions])
 
 sso = StringIO.StringIO()
 zf = zipfile.ZipFile(sso, 'w', zipfile.ZIP_DEFLATED)
-zf.writestr('0',new_blocks)
+zf.writestr('0', new_blocks)
 zf.close()
 
 # The Empyrion Blueprints don't include the first PK, so don't read that.
@@ -188,16 +222,29 @@ new_zip = sso.read()
 
 # Write out:
 # - The initial global header
+#  > Byte 0x08: 00=UNKNOWN, 02=BA, 04=SV, 08=CV, 16=HV
 # - Rebuild the dimensions
 # - The device groupings from the original BP
 # - Replace the zip section with our newly built one
-new_bp = bp[:9] + \
-struct.pack("<LLL",int(length),int(width),int(height)) + \
+
+if pargs.blueprint_class is None:
+    header = bp[:9]
+else:
+    header = bp[:8]
+    class_code = blueprint_class_mapping[pargs.blueprint_class]
+    header += class_code
+    print "Blueprint class code: %d" % ord(class_code)
+    print [ord(x) for x in bp[:9]]
+    print [ord(x) for x in header]
+    # exit(1)
+
+new_bp = header + \
+struct.pack("<LLL", int(length), int(width), int(height)) + \
 bp[21:bp.rfind('\x03\x04\x14\x00\x00\x00\x08\x00')] + \
 new_zip
 
 #sys.stdout.write(new_bp)
-with open(pargs.blueprint_file,'w') as fp:
+with open(pargs.blueprint_file, 'w') as fp:
     fp.write(new_bp)
     fp.flush()
     fp.close()

@@ -7,13 +7,18 @@ To use these scripts, you'll need a 3D, or other source of initial data. Once yo
   - The input coordinates should be integer (as they are cast to integers in the Python script), so make sure that the truncation is happening intelligently, before being fed into `replace_bp.py`.
   - The input coordinates can be at any scale, and positive or negative in any way (compared to STL vertices which must all lie in the non-negative octant).
   - The input coordinates are transformed so that the object lies close to the origin, and so that transformation doesn't need to happen before sending the vertices to the Python script.
-  - Note that blocks, regardless of blueprint type (HC, SV, CV, BA) are unit cubes (1x1x1), so when constructing the coordinates for blocks, it is important to note that gaps larger than one unit in any dimension between locations will have no block present (there won't be any filling).
+  - Note that blocks, regardless of blueprint type (HV, SV, CV, BA) are unit cubes (1x1x1), so when constructing the coordinates for blocks, it is important to note that gaps larger than one unit in any dimension between locations will have no block present (there won't be any filling).
 - Optional: Save the collection of points as a CSV
 - Pass the collection of points to the stdin of the `replace_bp.py` Python script, giving the script a single argument that is the filename of the `.epb` file in the example BP folder.
   - It is recommended that a copy of the example BP folder be made before clobbering the contents, as good practice.
 - Once the script completes, copy the folder containing the modified BP into the `Saves/Blueprints/<SteamID>` folder, and spawn it in game.
   - The game only loads the Blueprint collection when you join a game, so if you are currently in a game you will have to exit the game then rejoin/load a game.
   - When saving blueprints inside of a game, the changes are immediately reflected on disk, so no leave/load steps need to be performed for simply inspecting/copying the Blueprints created in-game.
+
+# Example
+ ```
+ python stl_to_pts.py Machriel.stl 100 | python replace_bp.py --blueprint-file /cygdrive/c/Program\ Files\ \(x86\)/Steam/steamapps/common/Empyrion\ -\ Galactic\ Survival/Saves/Blueprints/2847197978373946/SingleBlock_0/SingleBlock_0.epb --blueprint-class CV
+ ```
 
 ## Environment
 These scripts rely on some command line Linux knowledge and capability. They will run fine under the Windows X bash/Subsystem for Linux, and any Unix environment.
