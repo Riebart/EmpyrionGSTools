@@ -45,7 +45,11 @@ if __name__ == "__main__":
     import json
     import argparse
 
-    input_data = sys.stdin.read()
+    if not sys.stdin.isatty():
+        input_data = sys.stdin.read()
+    else:
+        input_data = None
+    
     try:
         new_bp_64 = lambda_handler(json.loads(input_data), None)
     except Exception:
@@ -57,7 +61,7 @@ if __name__ == "__main__":
             required=False,
             default=25,
             type=int,
-            help="A permutation of 1,2,3 to remap the coordinates. Example: 1,3,2")
+            help="Number of blocks (on the longest dimension) to use in the resulting Blueprint resolution.")
         parser.add_argument(
             "--dimension-remap",
             required=False,
@@ -78,4 +82,4 @@ if __name__ == "__main__":
             }
         new_bp_64 = lambda_handler(lambda_body, None)
 
-    print new_bp_64
+    print base64.b64decode(new_bp_64)
