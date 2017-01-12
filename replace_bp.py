@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# More complex script that convers locations in 3D space into a Blueprint
+# More complex script that converts locations in 3D space into a Blueprint
 # dense filled matrix/block types.
 #
 # For now, only a Steel cube block is used.
@@ -10,7 +10,6 @@ import math
 import struct
 import StringIO
 import zipfile
-import argparse
 
 
 def dbm_bitmask(dbm):
@@ -145,8 +144,7 @@ def generate_blocks(positions, meta):
         for i in range(8):
             if b & (1 << i):
                 set_bits += 1
-    print "%d bits set in header bytes for %d blocks." % (set_bits,
-                                                          len(positions))
+    sys.stderr.write("%d bits set in header bytes for %d blocks.\n" % (set_bits, len(positions)))
 
     # Step 4: Fill in the body/footer with steel blocks and whatever the footer represents.
     # We need to build a mapping of positions to order to look up the positions and
@@ -169,82 +167,80 @@ def csv_to_array(csv):
     return [[int(float(i)) for i in l.strip().split(",")]
             for l in csv.strip().split("\n")]
 
+def build_new_bp(bp_body, positions, bp_class):
+    blueprint_class_mapping = {
+        "CV": chr(8),
+        "BA": chr(2),
+        "HV": chr(16),
+        "SV": chr(4)
+    }
 
-parser = argparse.ArgumentParser(
-    description="Given an input CSV of coordinates, modify a Blueprint to transplant the blocks into."
-)
-parser.add_argument(
-    "--blueprint-file",
-    required=True,
-    help="Filename of the blueprint file to modify.")
-parser.add_argument(
-    "--dimension-remap",
-    required=False,
-    default="1,2,3",
-    help="A permutation of 1,2,3 to remap the coordinates. Example: 1,3,2")
-parser.add_argument(
-    "--blueprint-class",
-    required=False,
-    default=None,
-    help="The class (CV, HV, SV, BA) of the blueprint.")
-blueprint_class_mapping = {
-    "CV": chr(8),
-    "BA": chr(2),
-    "HV": chr(16),
-    "SV": chr(4)
-}
+    new_blocks, length, width, height = generate_blocks(
+        [tuple(p[:3]) for p in positions], [tuple(p[3:]) for p in positions])
 
-pargs = parser.parse_args()
+    sso = StringIO.StringIO()
+    zf = zipfile.ZipFile(sso, 'w', zipfile.ZIP_DEFLATED)
+    zf.writestr('0', new_blocks)
+    zf.close()
 
-with open(pargs.blueprint_file, 'r') as fp:
-    bp = fp.read()
+    # The Empyrion Blueprints don't include the first PK, so don't read that.
+    sso.seek(2)
+    new_zip = sso.read()
 
-positions = csv_to_array(sys.stdin.read())
+    # Write out:
+    # - The initial global header
+    #  > Byte 0x08: 00=UNKNOWN, 02=BA, 04=SV, 08=CV, 16=HV
+    # - Rebuild the dimensions
+    # - The device groupings from the original BP
+    # - Replace the zip section with our newly built one
 
-if pargs.dimension_remap != None:
-    remap = [int(i) - 1 for i in pargs.dimension_remap.split(",")]
-    remap.extend([3, 4])
-    positions = [
-        tuple([p[remap[i]] for i in range(min(5, len(p)))]) for p in positions
-    ]
+    if bp_class is None:
+        header = bp_body[:9]
+    else:
+        header = bp_body[:8]
+        class_code = blueprint_class_mapping[bp_class]
+        header += class_code
 
-new_blocks, length, width, height = generate_blocks(
-    [tuple(p[:3]) for p in positions], [tuple(p[3:]) for p in positions])
+    new_bp = header + \
+    struct.pack("<LLL", int(length), int(width), int(height)) + \
+    bp_body[21:bp_body.rfind('\x03\x04\x14\x00\x00\x00\x08\x00')] + \
+    new_zip
 
-sso = StringIO.StringIO()
-zf = zipfile.ZipFile(sso, 'w', zipfile.ZIP_DEFLATED)
-zf.writestr('0', new_blocks)
-zf.close()
+    return new_bp
 
-# The Empyrion Blueprints don't include the first PK, so don't read that.
-sso.seek(2)
-new_zip = sso.read()
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser(
+#         description="Given an input CSV of coordinates, modify a Blueprint to transplant the blocks into."
+#     )
+#     parser.add_argument(
+#         "--blueprint-file",
+#         required=True,
+#         help="Filename of the blueprint file to modify.")
+#     parser.add_argument(
+#         "--dimension-remap",
+#         required=False,
+#         default="1,2,3",
+#         help="A permutation of 1,2,3 to remap the coordinates. Example: 1,3,2")
+#     parser.add_argument(
+#         "--blueprint-class",
+#         required=False,
+#         default=None,
+#         help="The class (CV, HV, SV, BA) of the blueprint.")
+    
+#     pargs = parser.parse_args()
 
-# Write out:
-# - The initial global header
-#  > Byte 0x08: 00=UNKNOWN, 02=BA, 04=SV, 08=CV, 16=HV
-# - Rebuild the dimensions
-# - The device groupings from the original BP
-# - Replace the zip section with our newly built one
+#     with open(pargs.blueprint_file, 'r') as fp:
+#         bp = fp.read()
 
-if pargs.blueprint_class is None:
-    header = bp[:9]
-else:
-    header = bp[:8]
-    class_code = blueprint_class_mapping[pargs.blueprint_class]
-    header += class_code
-    print "Blueprint class code: %d" % ord(class_code)
-    print [ord(x) for x in bp[:9]]
-    print [ord(x) for x in header]
-    # exit(1)
+#     positions = csv_to_array(sys.stdin.read())
 
-new_bp = header + \
-struct.pack("<LLL", int(length), int(width), int(height)) + \
-bp[21:bp.rfind('\x03\x04\x14\x00\x00\x00\x08\x00')] + \
-new_zip
+#     if pargs.dimension_remap != None:
+#         dim_remap = [int(i) - 1 for i in pargs.dimension_remap.split(",")]
+        
+#     new_bp = build_new_bp(bp, positions, dim_remap, pargs.blueprint_class)
 
-#sys.stdout.write(new_bp)
-with open(pargs.blueprint_file, 'w') as fp:
-    fp.write(new_bp)
-    fp.flush()
-    fp.close()
+#     #sys.stdout.write(new_bp)
+#     with open(pargs.blueprint_file, 'w') as fp:
+#         fp.write(new_bp)
+#         fp.flush()
+#         fp.close()

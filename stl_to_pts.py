@@ -5,7 +5,6 @@ Given an STL mesh, refine the triangles and smooth with sloped blocks.
 
 import sys
 import math
-import time
 import multiprocessing
 
 # Build the list of unit vetors
@@ -205,7 +204,7 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
     Perform the split_tris() operation on chunks of primitives in parallel, and
     recombine at the end.
     """
-    n = int(math.ceil(1.0*len(Primitives)/multiprocessing.cpu_count()))
+    n = int(math.ceil(1.0*len(Primitives)/(2*multiprocessing.cpu_count())))
     primitive_chunks = [Primitives[i:i + n] for i in xrange(0, len(Primitives), n)]
     output_queue = multiprocessing.Queue()
     procs = [multiprocessing.Process(target=split_tris,
@@ -431,39 +430,35 @@ def map_to_empyrion_codes(points):
 def blocks_to_csv(blocks):
     return ["{:d},{:d},{:d},{:d},{:d}".format(b[0], b[1], b[2], b[3], b[4]) for b in blocks]
 
-def tests():
-    pts = [(i,1,0) for i in range(3)] + [(i,0,1) for i in range(3)] + [(0,2,0)]
-    print "\n".join(blocks_to_csv(map_to_empyrion_codes(smooth_pts(pts))))
+# if __name__ == "__main__":
+#     if len(sys.argv) < 3:
+#         print "Usage: stl_to_pts.py <Path to STL file> <Number of voxel elements in the longest dimension>"
+#         exit(1)
 
-if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print "Usage: stl_to_pts.py <Path to STL file> <Number of voxel elements in the longest dimension>"
-        exit(1)
+#     t0 = time.time()
+#     # Convert the STL to a list of triangles.
+#     with open(sys.argv[1], 'r') as fp:
+#         solids = STLFile.read_solids(fp)
 
-    t0 = time.time()
-    # Convert the STL to a list of triangles.
-    with open(sys.argv[1], 'r') as fp:
-        solids = STLFile.read_solids(fp)
+#     triangles = [ e for s in solids for e in s[1] ]
 
-    triangles = [ e for s in solids for e in s[1] ]
+#     sys.stderr.write("Identified %d triangles in the STL file.\n" % len(triangles))
+#     bounds = triangle_list_bounds(triangles)
+#     longest_dim = max([i[1]-i[0] for i in bounds])
+#     resolution = longest_dim / float(sys.argv[2])
+#     sys.stderr.write("STL bounds: %s\n" % str(bounds))
 
-    sys.stderr.write("Identified %d triangles in the STL file.\n" % len(triangles))
-    bounds = triangle_list_bounds(triangles)
-    longest_dim = max([i[1]-i[0] for i in bounds])
-    resolution = longest_dim / float(sys.argv[2])
-    sys.stderr.write("STL bounds: %s\n" % str(bounds))
+#     # Convert the polygonal representation of a 2D surface in 3D space into
+#     # a cloud of points where no point is more than the given resolution away
+#     # from a neighbour.
+#     pts = parallel_split_tris(triangles, resolution)
+#     smoothed_pts = smooth_pts(pts)
+#     mapped_blocks = map_to_empyrion_codes(smoothed_pts)
 
-    # Convert the polygonal representation of a 2D surface in 3D space into
-    # a cloud of points where no point is more than the given resolution away
-    # from a neighbour.
-    pts = parallel_split_tris(triangles, resolution)
-    smoothed_pts = smooth_pts(pts)
-    mapped_blocks = map_to_empyrion_codes(smoothed_pts)
-
-    # Print out the points as a CSV.
-    sys.stdout.write("\n".join(blocks_to_csv(mapped_blocks)))
-    # for b in mapped_blocks:
-    #     sys.stdout.write("{:d},{:d},{:d},{:d},{:d}\n".format(b[0], b[1], b[2], b[3], b[4]))
-    sys.stderr.write("Converted %d triangles to %d points\n" %
-                    (len(triangles), len(mapped_blocks)))
-    sys.stderr.write("Operation took %f seconds\n" % (time.time() - t0))
+#     # Print out the points as a CSV.
+#     sys.stdout.write("\n".join(blocks_to_csv(mapped_blocks)))
+#     # for b in mapped_blocks:
+#     #     sys.stdout.write("{:d},{:d},{:d},{:d},{:d}\n".format(b[0], b[1], b[2], b[3], b[4]))
+#     sys.stderr.write("Converted %d triangles to %d points\n" %
+#                     (len(triangles), len(mapped_blocks)))
+#     sys.stderr.write("Operation took %f seconds\n" % (time.time() - t0))
