@@ -54,7 +54,7 @@ if __name__ == "__main__":
         new_bp_64 = lambda_handler(json.loads(input_data), None)
     except Exception:
         parser = argparse.ArgumentParser(
-            description="Given an input CSV of coordinates, modify a Blueprint to match the blocks."
+            description="Takes a text format STL file on stdin, and prints an Empytion blueprint file to stdout."
         )
         parser.add_argument(
             "--blueprint-size",

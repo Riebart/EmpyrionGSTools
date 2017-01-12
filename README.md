@@ -13,7 +13,7 @@ usage: lambda_index.py [-h] [--blueprint-size BLUEPRINT_SIZE]
                        [--dimension-remap DIMENSION_REMAP]
                        [--blueprint-class BLUEPRINT_CLASS]
 
-Given an input CSV of coordinates, modify a Blueprint to match the blocks.
+Takes a text format STL file on stdin, and prints an Empytion blueprint file to stdout.
 
 optional arguments:
   -h, --help            show this help message and exit
