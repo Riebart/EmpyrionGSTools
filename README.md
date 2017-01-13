@@ -76,7 +76,8 @@ Example usage: `cat mesh.msh | python msh_to_stl.py > mesh.stl`
 This function is suitable for deployment to AWS Lambda using the following script as a scaffold:
 
 ```
-zip deploy.zip lambda_index.py empyrion.py BlueprintBase/*
+chmod 755 *py BlueprintBase BlueprintBase/*
+rm deploy.zip && zip deploy.zip lambda_index.py empyrion.py BlueprintBase/*
 aws lambda update-function-code --function-name EmpyrionBlueprintConverter --zip-file fileb://deploy.zip
 time wget --header "Content-Type: application/json" \
 --post-data "{\"STLBody\": \"`cat Machriel.stl | base64 -w0`\",\"BlueprintSize\":100}" \

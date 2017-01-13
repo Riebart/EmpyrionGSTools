@@ -1,7 +1,10 @@
+#!/usr/bin/env python
+
 """
 Implements a generic function that ingests either a text STL file on stdin,
 or a Lambda event body, and performs the necessary functions.
 """
+
 import os
 import sys
 import base64
