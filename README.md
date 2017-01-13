@@ -71,3 +71,110 @@ Example usage: `cat mesh.msh | python msh_to_stl.py > mesh.stl`
 
 # References
 - `.msh` file format reference: http://3dcenter.ru/forum/index.php?act=attach&type=post&id=171261
+
+# Deploying to AWS
+This function is suitable for deployment to AWS Lambda using the following script as a scaffold:
+
+```
+zip deploy.zip lambda_index.py empyrion.py BlueprintBase/*
+aws lambda update-function-code --function-name EmpyrionBlueprintConverter --zip-file fileb://deploy.zip
+time wget --header "Content-Type: application/json" \
+--post-data "{\"STLBody\": \"`cat Machriel.stl | base64 -w0`\",\"BlueprintSize\":100}" \
+https://z6q4xdau9i.execute-api.us-east-1.amazonaws.com/Production/BlueprintFromMesh
+```
+
+### API Gateway API spec
+The following is the API-Gateway extended Swagger definition of the API used to front this function.
+```json
+{
+  "swagger": "2.0",
+  "info": {
+    "version": "2017-01-13T00:31:41Z",
+    "title": "Empyrion"
+  },
+  "host": "z6q4xdau9i.execute-api.us-east-1.amazonaws.com",
+  "basePath": "/Production",
+  "schemes": [
+    "https"
+  ],
+  "paths": {
+    "/BlueprintFromMesh": {
+      "post": {
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "schema": {
+              "$ref": "#/definitions/Empty"
+            }
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "responses": {
+            "default": {
+              "statusCode": "200"
+            }
+          },
+          "uri": "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:0000000000:function:EmpyrionBlueprintConverter/invocations",
+          "passthroughBehavior": "when_no_match",
+          "httpMethod": "POST",
+          "contentHandling": "CONVERT_TO_TEXT",
+          "type": "aws"
+        }
+      },
+      "options": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response",
+            "schema": {
+              "$ref": "#/definitions/Empty"
+            },
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "type": "string"
+              },
+              "Access-Control-Allow-Methods": {
+                "type": "string"
+              },
+              "Access-Control-Allow-Headers": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "responses": {
+            "default": {
+              "statusCode": "200",
+              "responseParameters": {
+                "method.response.header.Access-Control-Allow-Methods": "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+                "method.response.header.Access-Control-Allow-Origin": "'*'"
+              }
+            }
+          },
+          "requestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          },
+          "passthroughBehavior": "when_no_match",
+          "type": "mock"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "Empty": {
+      "type": "object",
+      "title": "Empty Schema"
+    }
+  }
+}
+```

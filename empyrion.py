@@ -91,11 +91,14 @@ class STLFile(object):
         Triples of Triples
         """
         # Read in the 'solid' line, getting the name (which may be an empty string)
+        # If there's a null in the name, then this is a binary file, and it should
+        # be discarded and ignored.
         name_line = file_descriptor.readline()
-        if name_line == "":
+        if name_line == "" or '\0' in name_line:
             return (None, None)
 
         name = name_line.strip().split(" ", 1)[1]
+
         triangles = []
         # Can't mix iteration and .readline(), which made conditionally reading
         # multiple lines awkward, so the infinite while loop and break is used.

@@ -2,11 +2,13 @@
 Implements a generic function that ingests either a text STL file on stdin,
 or a Lambda event body, and performs the necessary functions.
 """
-
+import os
+import sys
 import base64
 import StringIO
 
 import empyrion
+
 
 def lambda_handler(Event, Context):
     """
@@ -14,8 +16,10 @@ def lambda_handler(Event, Context):
     based on the parameters.
     """
     stl_body = base64.b64decode(Event['STLBody'])
-    voxel_dimension = int(Event['BlueprintSize']) if 'BlueprintSize' in Event else 25
-    dim_remap = Event['DimensionRemap'] if 'DimensionRemap' in Event else [1, 2, 3]
+    voxel_dimension = int(Event[
+        'BlueprintSize']) if 'BlueprintSize' in Event else 25
+    dim_remap = Event[
+        'DimensionRemap'] if 'DimensionRemap' in Event else [1, 2, 3]
     bp_class = Event['BlueprintClass'] if 'BlueprintClass' in Event else 'SV'
 
     with open('BlueprintBase/BlueprintBase.epb', 'r') as fp:
@@ -24,14 +28,28 @@ def lambda_handler(Event, Context):
     ssi = StringIO.StringIO(stl_body)
     solids = empyrion.STLFile.read_solids(ssi)
     triangles = [e for s in solids for e in s[1]]
-    bounds = empyrion.triangle_list_bounds(triangles)
-    longest_dim = max([i[1]-i[0] for i in bounds])
-    resolution = longest_dim / float(voxel_dimension)
-    pts = empyrion.parallel_split_tris(triangles, resolution)
 
-    pts = [
-        tuple([p[dim_remap[i]-1] for i in range(3)]) for p in pts
-    ]
+    if len(triangles) == 0:
+        return ""
+
+    bounds = empyrion.triangle_list_bounds(triangles)
+    sys.stderr.write("%s\n" % str(bounds))
+    longest_dim = max([i[1] - i[0] for i in bounds])
+    resolution = longest_dim / float(voxel_dimension)
+
+    shm_stat = None
+    try:
+        shm_stat = os.stat('/dev/shm')
+    except OSError as e:
+        if e.errno != 2:
+            raise e
+
+    if shm_stat is None:
+        pts = empyrion.split_tris(triangles, resolution)
+    else:
+        pts = empyrion.parallel_split_tris(triangles, resolution)
+
+    pts = [tuple([p[dim_remap[i] - 1] for i in range(3)]) for p in pts]
 
     smoothed_pts = empyrion.smooth_pts(pts)
     mapped_blocks = empyrion.map_to_empyrion_codes(smoothed_pts)
@@ -49,7 +67,7 @@ if __name__ == "__main__":
         input_data = sys.stdin.read()
     else:
         input_data = None
-    
+
     try:
         new_bp_64 = lambda_handler(json.loads(input_data), None)
     except Exception:
@@ -61,12 +79,14 @@ if __name__ == "__main__":
             required=False,
             default=25,
             type=int,
-            help="Number of blocks (on the longest dimension) to use in the resulting Blueprint resolution.")
+            help="Number of blocks (on the longest dimension) to use in the resulting Blueprint resolution."
+        )
         parser.add_argument(
             "--dimension-remap",
             required=False,
             default="1,2,3",
-            help="A permutation of 1,2,3 to remap the coordinates. Example: 1,3,2")
+            help="A permutation of 1,2,3 to remap the coordinates. Example: 1,3,2"
+        )
         parser.add_argument(
             "--blueprint-class",
             required=False,
@@ -75,11 +95,13 @@ if __name__ == "__main__":
         pargs = parser.parse_args()
         lambda_body = {
             'STLBody': base64.b64encode(input_data),
-            'DimensionRemap': [int(d) for d in pargs.dimension_remap.split(",")],
-            'BlueprintSize': pargs.blueprint_size if pargs.blueprint_size > 0 else 25,
-            'BlueprintClass': pargs.blueprint_class if
-                              pargs.blueprint_class in ['HV', 'SV', 'CV', 'BA'] else 'SV'
-            }
+            'DimensionRemap':
+            [int(d) for d in pargs.dimension_remap.split(",")],
+            'BlueprintSize': pargs.blueprint_size
+            if pargs.blueprint_size > 0 else 25,
+            'BlueprintClass': pargs.blueprint_class
+            if pargs.blueprint_class in ['HV', 'SV', 'CV', 'BA'] else 'SV'
+        }
         new_bp_64 = lambda_handler(lambda_body, None)
 
     print base64.b64decode(new_bp_64)
