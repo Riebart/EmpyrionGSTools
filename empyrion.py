@@ -215,33 +215,61 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
     Perform the split_tris() operation on chunks of primitives in parallel, and
     recombine at the end.
     """
-    n = int(math.ceil(1.0*len(Primitives)/(2*multiprocessing.cpu_count())))
-    primitive_chunks = [Primitives[i:i + n] for i in xrange(0, len(Primitives), n)]
+    # For the number of jobs per process, look the bounds, the primitive count,
+    # and the resolution. Create process that will have an approximate bound
+    # on the number of points generated.
+    size = [i[1] - i[0] for i in triangle_list_bounds(Primitives)]
+    # Primitives per unit length on an axis, approximately.
+    prims_per_unit = math.pow(len(Primitives) / (size[0]* size[1] * size[2]), 1.0/3)
+    # Resolution is essentially units-per-point, so dimensional analysis gives...
+    points_per_prim = 1.0 / (Resolution * prims_per_unit)
+    MAX_POINTS_PER_PROCESS = 2000.0
+    prims_per_process = int(math.ceil(MAX_POINTS_PER_PROCESS / points_per_prim))
+    sys.stderr.write("Approximate number of points generated per process: %s\n" % prims_per_process)
+
+    # n = int(math.ceil(1.0*len(Primitives)/(2*multiprocessing.cpu_count())))
+    primitive_chunks = [Primitives[i:i + prims_per_process]
+                        for i in xrange(0, len(Primitives), prims_per_process)]
     output_queue = multiprocessing.Queue()
     procs = [multiprocessing.Process(target=split_tris,
                                      args=(chunk, Resolution, BatchSize, output_queue))
              for chunk in primitive_chunks]
     sys.stderr.write("Prepared %d processes of work\n" % len(procs))
-    
-    for p in procs:
+
+    # First, start cpu_count() processes.
+    running_procs = procs[:multiprocessing.cpu_count()]
+    for p in running_procs:
         p.start()
-    
-    pts = []
-    while len(procs) > 0:
-        for p in procs:
-            p.join(1.0)
-            while not output_queue.empty():
-                pipe_pts = output_queue.get()
-                sys.stderr.write("Pulled %d pts from the pipe\n" % len(pipe_pts))
-                pts.extend(pipe_pts)
-        procs = [p for p in procs if p.is_alive()]
+    queued_procs = [p for p in procs if p not in running_procs]
+
+    pts = set()
+    # As long as there's a running process, keep cycling.
+    while len(running_procs) > 0:
+        # Attempt to join all running processes.
+        for p in running_procs:
+            p.join(0.0)
+
+        while not output_queue.empty():
+            pipe_pts = output_queue.get()
+            sys.stderr.write("Pulled %d pts from the pipe\n" % len(pipe_pts))
+            pts.update(pipe_pts)
+
+        # Rebuild the running processes list to only include those still alive
+        running_procs = [p for p in running_procs if p.is_alive()]
+
+        # If there are fewer running processes than available CPUs, start some more.
+        pending_procs = queued_procs[:multiprocessing.cpu_count() - len(running_procs)]
+        for p in pending_procs:
+            p.start()
+        # Once started, add them to the pending procs, and remove them from the
+        # list of queued processes.
+        running_procs += pending_procs
+        queued_procs = [p for p in queued_procs if p not in running_procs]
 
     while not output_queue.empty():
-        pts.extend(output_queue.get())
-    
-    pts = list(set(pts))
+        pts.update(output_queue.get())
 
-    return pts
+    return list(pts)
 
 def split_tris(Primitives, Resolution, BatchSize=100, OutputQueue=None):
     """
