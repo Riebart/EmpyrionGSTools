@@ -70,10 +70,28 @@ class STLFile(object):
     """
 
     @staticmethod
-    def read_solids(file_descriptor):
+    def read_binary_stl(file_descriptor):
         """
-        Convert a single 'solid' section of an STL file into triangles.
-        Ignores normal verctor information.
+        Read all triangles from a binary STL file.
+        """
+        header = file_descriptor.read(80)
+        ntris = struct.unpack("<L", file_descriptor.read(4))[0]
+
+        tris = []
+        for i in range(ntris):
+            normal = struct.unpack("<fff", file_descriptor.read(4*3))
+            v1 = struct.unpack("<fff", file_descriptor.read(4*3))
+            v2 = struct.unpack("<fff", file_descriptor.read(4*3))
+            v3 = struct.unpack("<fff", file_descriptor.read(4*3))
+            attributes = struct.unpack("<H", file_descriptor.read(2))
+            tris.append(Triple(Triple(*v1), Triple(*v2), Triple(*v3)))
+        return tris
+
+    @staticmethod
+    def read_ascii_stl(file_descriptor):
+        """
+        Reads a single solid section from an ASCII STL file, returning a list
+        marging the triangles from all solids found in the file.
         """
         _solids = []
         solid_name, solid_triangles = STLFile.solid_to_triangles(file_descriptor)
@@ -82,7 +100,26 @@ class STLFile(object):
             _solids.append((solid_name, solid_triangles))
             solid_name, solid_triangles = STLFile.solid_to_triangles(file_descriptor)
 
-        return _solids
+        triangles = [e for s in _solids for e in s[1]]
+        return triangles
+
+    @staticmethod
+    def read_triangles(file_descriptor):
+        """
+        Given a STL file, determine if it is ASCII or binary, and return a list
+        of triangles representing all triangles in the file. For ACSII files,
+        the triangles of all solids in the file.
+        """
+        # First, determine the file is binary or ASCII. Do this by reading the
+        # first 5 bytes and if those are 'solid', then assume it is ASCII. Seek
+        # back to the start after reading the header.
+        is_ascii = (file_descriptor.read(5) == 'solid')
+        file_descriptor.seek(0)
+
+        if is_ascii:
+            return STLFile.read_ascii_stl(file_descriptor)
+        else:
+            return STLFile.read_binary_stl(file_descriptor)
 
     @staticmethod
     def solid_to_triangles(file_descriptor):

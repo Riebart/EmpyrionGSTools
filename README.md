@@ -70,6 +70,7 @@ Example usage: `cat mesh.msh | python msh_to_stl.py > mesh.stl`
   - Recommended dimension remap: 1,3,2
 - GTG Zephyrus: https://p3d.in/mFZFz
   - Recommended dimentino mirror: 3
+- FS2 models: http://sectorgame.com/fsfiles/?dir=uploads/Models/
 
 # References
 - `.msh` file format reference: http://3dcenter.ru/forum/index.php?act=attach&type=post&id=171261

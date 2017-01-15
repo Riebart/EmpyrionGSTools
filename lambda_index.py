@@ -7,6 +7,7 @@ or a Lambda event body, and performs the necessary functions.
 
 import os
 import sys
+import time
 import base64
 import StringIO
 
@@ -30,8 +31,9 @@ def lambda_handler(Event, Context):
         bp_body = fp.read()
 
     ssi = StringIO.StringIO(stl_body)
-    solids = empyrion.STLFile.read_solids(ssi)
-    triangles = [e for s in solids for e in s[1]]
+    t0 = time.time()
+    triangles = empyrion.STLFile.read_triangles(ssi)
+    sys.stderr.write("Reading model took %s seconds.\n" % str(time.time() - t0))
     sys.stderr.write("Model has %d triangles\n" % len(triangles))
 
     if len(triangles) == 0:
@@ -50,25 +52,32 @@ def lambda_handler(Event, Context):
         if e.errno != 2:
             raise e
 
+    t0 = time.time()
     if shm_stat is None:
         pts = empyrion.split_tris(triangles, resolution)
     else:
         pts = empyrion.parallel_split_tris(triangles, resolution)
-
-    pts = [tuple([p[dim_remap[i] - 1] for i in range(3)]) for p in pts]
+    sys.stderr.write("Triangle to point refinement took %s seconds.\n" % str(time.time() - t0))
     sys.stderr.write("Split %d triangles into %d points.\n" % (len(triangles), len(pts)))
 
     # Mirror the dimensions listed. For each dimension, just negate the coordinates
     # of all points in that dimension
+    t0 = time.time()
+    pts = [tuple([p[dim_remap[i] - 1] for i in range(3)]) for p in pts]
     tuple_mul = lambda t1, t2: (t1[0] * t2[0], t1[1] * t2[1], t1[2] * t2[2])
     dim_mirror_tuple = [-1 if i + 1 in dim_mirror else 1 for i in range(3)]
     pts = [tuple_mul(dim_mirror_tuple, p) for p in pts]
+    sys.stderr.write("Dimension mirroring and remapping took %s seconds.\n" % str(time.time() - t0))
 
+    t0 = time.time()
     smoothed_pts = empyrion.smooth_pts(pts)
     mapped_blocks = empyrion.map_to_empyrion_codes(smoothed_pts)
+    sys.stderr.write("Voxel smoothing took %s seconds.\n" % str(time.time() - t0))
     sys.stderr.write("Smoothed %d voxels into %d blocks.\n" % (len(pts), len(mapped_blocks)))
 
+    t0 = time.time()
     new_bp = empyrion.build_new_bp(bp_body, mapped_blocks, bp_class)
+    sys.stderr.write("Blueprint generation took %s seconds.\n" % str(time.time() - t0))
     sys.stderr.write("Resulting blueprint size: %d bytes\n" % len(new_bp))
 
     return base64.b64encode(new_bp)
