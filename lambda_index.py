@@ -92,10 +92,23 @@ if __name__ == "__main__":
         input_data = None
 
     try:
+        pargs = None
         new_bp_64 = lambda_handler(json.loads(input_data), None)
     except Exception:
         parser = argparse.ArgumentParser(
             description="Takes a text format STL file on stdin, and prints an Empytion blueprint file to stdout."
+        )
+        parser.add_argument(
+            "--stl-file",
+            required=False,
+            default=None,
+            help="Filename of the input STL file."
+        )
+        parser.add_argument(
+            "--blueprint-output-file",
+            required=False,
+            default=None,
+            help="Filename of the file to write the output blueprint to. All contents will be overwritten if the file already exists."
         )
         parser.add_argument(
             "--blueprint-size",
@@ -122,6 +135,11 @@ if __name__ == "__main__":
             default=None,
             help="The class (CV, HV, SV, BA) of the blueprint.")
         pargs = parser.parse_args()
+
+        if pargs.stl_file is not None:
+            with open(pargs.stl_file, 'r') as fp:
+                input_data = fp.read()
+        
         lambda_body = {
             'STLBody': base64.b64encode(input_data),
             'DimensionRemap':
@@ -134,4 +152,8 @@ if __name__ == "__main__":
         }
         new_bp_64 = lambda_handler(lambda_body, None)
 
-    print base64.b64decode(new_bp_64)
+    if pargs is not None and pargs.blueprint_output_file is not None:
+        with open(pargs.blueprint_output_file, 'w') as fp:
+            fp.write(base64.b64decode(new_bp_64))
+    else:
+        print base64.b64decode(new_bp_64)

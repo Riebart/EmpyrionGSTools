@@ -10,6 +10,7 @@ Also implements reading from STL files, and performing the point refinement.
 
 import sys
 import math
+import time
 import struct
 import StringIO
 import zipfile
@@ -262,6 +263,11 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
     points_per_prim = 1.0 / math.pow((Resolution**3 * prims_per_unit3), 1.0/3)
     MAX_POINTS_PER_PROCESS = 2000.0
     prims_per_process = int(math.ceil(MAX_POINTS_PER_PROCESS / points_per_prim))
+
+    # The prims_per_process should be at most enough so that there are more
+    # processes than CPUs.
+    prims_per_process = min(int(math.floor(len(Primitives) / (3 * multiprocessing.cpu_count()))),
+                            prims_per_process)
     sys.stderr.write("Approximate number of points generated per process: %s\n" %
                      (points_per_prim * prims_per_process))
 
@@ -290,7 +296,7 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
         while not output_queue.empty():
             pipe_pts = output_queue.get()
             finished_procs += 1
-            sys.stderr.write("Pulled %d pts from the pipe (%d/%d)\n" % (len(pipe_pts), finished_procs, len(procs)))
+            sys.stderr.write("Pulled %d points from the pipe (%d/%d)\n" % (len(pipe_pts), finished_procs, len(procs)))
             pts.update(pipe_pts)
 
         # Rebuild the running processes list to only include those still alive
@@ -304,6 +310,10 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
         # list of queued processes.
         running_procs += pending_procs
         queued_procs = [p for p in queued_procs if p not in running_procs]
+
+        # Give the processes another second to do some work before checking on them.
+        # Prevents a certain amount of busywaiting.
+        time.sleep(1.0)
 
     while not output_queue.empty():
         pts.update(output_queue.get())
