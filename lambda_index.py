@@ -58,9 +58,11 @@ def lambda_handler(Event, Context):
     pts = [tuple([p[dim_remap[i] - 1] for i in range(3)]) for p in pts]
     sys.stderr.write("Split %d triangles into %d points.\n" % (len(triangles), len(pts)))
 
-    # Mirror the dimensions listed
-    for d in dim_mirror:
-        pass
+    # Mirror the dimensions listed. For each dimension, just negate the coordinates
+    # of all points in that dimension
+    tuple_mul = lambda t1, t2: (t1[0] * t2[0], t1[1] * t2[1], t1[2] * t2[2])
+    dim_mirror_tuple = [-1 if i + 1 in dim_mirror else 1 for i in range(3)]
+    pts = [tuple_mul(dim_mirror_tuple, p) for p in pts]
 
     smoothed_pts = empyrion.smooth_pts(pts)
     mapped_blocks = empyrion.map_to_empyrion_codes(smoothed_pts)
@@ -115,7 +117,7 @@ if __name__ == "__main__":
             'STLBody': base64.b64encode(input_data),
             'DimensionRemap':
             [int(d) for d in pargs.dimension_remap.split(",")],
-            'DimensionMirror': [p for p in pargs.dimension_mirror.split(',') if p != ""],
+            'DimensionMirror': [int(p) for p in pargs.dimension_mirror.split(',') if p != ""],
             'BlueprintSize': pargs.blueprint_size
                              if pargs.blueprint_size > 0 else 25,
             'BlueprintClass': pargs.blueprint_class

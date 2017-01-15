@@ -219,15 +219,15 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
     # and the resolution. Create process that will have an approximate bound
     # on the number of points generated.
     size = [i[1] - i[0] for i in triangle_list_bounds(Primitives)]
-    # Primitives per unit length on an axis, approximately.
-    prims_per_unit = math.pow(len(Primitives) / (size[0]* size[1] * size[2]), 1.0/3)
+    # Primitives per unit cube of volume, approximately.
+    prims_per_unit3 = len(Primitives) / (size[0]* size[1] * size[2])
     # Resolution is essentially units-per-point, so dimensional analysis gives...
-    points_per_prim = 1.0 / (Resolution * prims_per_unit)
+    points_per_prim = 1.0 / math.pow((Resolution**3 * prims_per_unit3), 1.0/3)
     MAX_POINTS_PER_PROCESS = 2000.0
     prims_per_process = int(math.ceil(MAX_POINTS_PER_PROCESS / points_per_prim))
-    sys.stderr.write("Approximate number of points generated per process: %s\n" % prims_per_process)
+    sys.stderr.write("Approximate number of points generated per process: %s\n" %
+                     (points_per_prim * prims_per_process))
 
-    # n = int(math.ceil(1.0*len(Primitives)/(2*multiprocessing.cpu_count())))
     primitive_chunks = [Primitives[i:i + prims_per_process]
                         for i in xrange(0, len(Primitives), prims_per_process)]
     output_queue = multiprocessing.Queue()
@@ -241,6 +241,7 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
     for p in running_procs:
         p.start()
     queued_procs = [p for p in procs if p not in running_procs]
+    finished_procs = 0
 
     pts = set()
     # As long as there's a running process, keep cycling.
@@ -251,7 +252,8 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
 
         while not output_queue.empty():
             pipe_pts = output_queue.get()
-            sys.stderr.write("Pulled %d pts from the pipe\n" % len(pipe_pts))
+            finished_procs += 1
+            sys.stderr.write("Pulled %d pts from the pipe (%d/%d)\n" % (len(pipe_pts), finished_procs, len(procs)))
             pts.update(pipe_pts)
 
         # Rebuild the running processes list to only include those still alive
@@ -268,6 +270,8 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
 
     while not output_queue.empty():
         pts.update(output_queue.get())
+        finished_procs += 1
+        sys.stderr.write("Pulled %d pts from the pipe (%d/%d)\n" % (len(pipe_pts), finished_procs, len(procs)))
 
     return list(pts)
 
@@ -281,7 +285,7 @@ def split_tris(Primitives, Resolution, BatchSize=100, OutputQueue=None):
     triangle list. This limits the growth rate of the point and triangle list, significantly
     improving memory consumption.
     """
-    pts = []
+    pts = set()
     tris = []
     tris_handled = 0
     for p in Primitives:
@@ -291,19 +295,18 @@ def split_tris(Primitives, Resolution, BatchSize=100, OutputQueue=None):
         tris_handled += 1
         if (tris_handled % BatchSize) == 0:
             # sys.stderr.write("Batch done (%d)\n" % tris_handled)
-            pts.extend([
+            pts.update([
                 rescale_round_point(t[i], Resolution)
                 for i in range(3) for t in tris
             ])
-            pts = list(set(pts))
             tris = []
 
     # sys.stderr.write("Final round (%d)\n" % tris_handled)
     # One final round of flatten/union
-    pts.extend([
+    pts.update([
         rescale_round_point(t[i], Resolution) for i in range(3) for t in tris
     ])
-    pts = list(set(pts))
+    pts = list(pts)
 
     # LEGACY: Super slow on pypy (2x CPython), included for posterity and entertainment.
     #pts = list(set([ rescale_round_point(t[i], Resolution) for i in range(3) for t in tris ]))
@@ -469,7 +472,7 @@ def map_to_empyrion_codes(points):
 def blocks_to_csv(blocks):
     return ["{:d},{:d},{:d},{:d},{:d}".format(b[0], b[1], b[2], b[3], b[4]) for b in blocks]
 
-def dbm_bitmask(dbm):
+def dbm_bitmask(dbm, block_type="\x87"):
     block_strings = ""
     bm = []
 
@@ -486,7 +489,7 @@ def dbm_bitmask(dbm):
                 z = y[k]
                 if z != False:
                     #block_strings += "\x87\x01\x00\x00"
-                    block_strings += "\x87" + \
+                    block_strings += block_type + \
                                      (chr(z[1]) if len(z) > 1 else chr(1)) + \
                                      chr(0) + \
                                      (chr(z[0]) if len(z) > 0 else chr(0))
@@ -531,8 +534,9 @@ def generate_blocks(positions, meta):
     # The string used for each block, corresponds to a steel cube.
     # The four bytes are (in order):
     # - Block type
-    #  > 0x87 = Steel
+    #  > 0x87 = Steel-Small
     #  > 0x8a = Hardened Steel
+    #  > 0x9c = CombatSteel-Large
     # - Rotation (Code, Forward, Up) with vectors as (x, y, z)
     #  > 0x01, +y, +z
     #  > 0x09, +x, +z
@@ -594,7 +598,7 @@ def generate_blocks(positions, meta):
     # This just returns a dense True/False matrix, which needs to be serialized into a bitmask.
     dense_boolean_matrix = sparse_to_dense(positions, meta, length, width,
                                            height)
-    bm_list, block_strings = dbm_bitmask(dense_boolean_matrix)
+    bm_list, block_strings = dbm_bitmask(dense_boolean_matrix, block_type)
     output += "".join([struct.pack('B', bm) for bm in bm_list])
     set_bits = 0
     for b in bm_list:
