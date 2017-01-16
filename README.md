@@ -82,9 +82,11 @@ This function is suitable for deployment to AWS Lambda using the following scrip
 chmod 755 *py BlueprintBase BlueprintBase/*
 rm deploy.zip && zip deploy.zip lambda_index.py empyrion.py BlueprintBase/*
 aws lambda update-function-code --function-name EmpyrionBlueprintConverter --zip-file fileb://deploy.zip
-time wget --header "Content-Type: application/json" \
---post-data "{\"STLBody\": \"`cat Machriel.stl | base64 -w0`\",\"BlueprintSize\":100}" \
-https://z6q4xdau9i.execute-api.us-east-1.amazonaws.com/Production/BlueprintFromMesh
+time wget -O- --header "Content-Type: application/json" \
+--post-data "{\"STLBody\": \"`cat Models/Machriel.stl | base64 -w0`\",\"BlueprintSize\":25}" \
+https://z6q4xdau9i.execute-api.us-east-1.amazonaws.com/Production/BlueprintFromMesh | \
+tr -d '"' | base64 -d - > \
+/cygdrive/c/Program\ Files\ \(x86\)/Steam/steamapps/common/Empyrion\ -\ Galactic\ Survival/Saves/Blueprints/76561197978304234/SingleBlock_0/SingleBlock_0.epb
 ```
 
 ### API Gateway API spec

@@ -26,6 +26,7 @@ def lambda_handler(Event, Context):
         'DimensionRemap'] if 'DimensionRemap' in Event else [1, 2, 3]
     dim_mirror = Event['DimensionMirror'] if 'DimensionMirror' in Event else []
     bp_class = Event['BlueprintClass'] if 'BlueprintClass' in Event else 'SV'
+    morphological_factors = Event['MorphologicalFactors'] if 'MorphologicalFactors' in Event else None
 
     with open('BlueprintBase/BlueprintBase.epb', 'r') as fp:
         bp_body = fp.read()
@@ -68,6 +69,15 @@ def lambda_handler(Event, Context):
     dim_mirror_tuple = [-1 if i + 1 in dim_mirror else 1 for i in range(3)]
     pts = [tuple_mul(dim_mirror_tuple, p) for p in pts]
     sys.stderr.write("Dimension mirroring and remapping took %s seconds.\n" % str(time.time() - t0))
+
+    if morphological_factors is not None:
+        t0 = time.time()
+        pts = empyrion.morphological_dilate(pts, morphological_factors[0])
+        sys.stderr.write("Morphological dilation took %s seconds.\n" % str(time.time() - t0))
+        t0 = time.time()
+        pts = empyrion.morphological_erode(pts, morphological_factors[1])
+        sys.stderr.write("Morphological erosion took %s seconds.\n" % str(time.time() - t0))
+
 
     t0 = time.time()
     smoothed_pts = empyrion.smooth_pts(pts)
@@ -134,12 +144,26 @@ if __name__ == "__main__":
             required=False,
             default=None,
             help="The class (CV, HV, SV, BA) of the blueprint.")
+        parser.add_argument(
+            "--morphological-factors",
+            required=False,
+            default=None,
+            help="""A positive integer value indicating how much morphological smoothing/filling
+            to do. If given as two positive integer values separated by a comma, the first value
+            will be used for dilation, and the second value will be used for erosion.""")
         pargs = parser.parse_args()
 
         if pargs.stl_file is not None:
             with open(pargs.stl_file, 'r') as fp:
                 input_data = fp.read()
-        
+
+        if pargs.morphological_factors is not None:
+            m_factors = [int(f) for f in pargs.morphological_factors.strip().split(",")]
+            if len(m_factors) == 1:
+                m_factors = m_factors * 2
+        else:
+            m_factors = None
+
         lambda_body = {
             'STLBody': base64.b64encode(input_data),
             'DimensionRemap':
@@ -148,7 +172,8 @@ if __name__ == "__main__":
             'BlueprintSize': pargs.blueprint_size
                              if pargs.blueprint_size > 0 else 25,
             'BlueprintClass': pargs.blueprint_class
-                              if pargs.blueprint_class in ['HV', 'SV', 'CV', 'BA'] else 'SV'
+                              if pargs.blueprint_class in ['HV', 'SV', 'CV', 'BA'] else 'SV',
+            'MorphologicalFactors': m_factors
         }
         new_bp_64 = lambda_handler(lambda_body, None)
 

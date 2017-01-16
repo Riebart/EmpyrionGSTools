@@ -361,6 +361,65 @@ def split_tris(Primitives, Resolution, BatchSize=100, OutputQueue=None):
         OutputQueue.put(pts)
     return pts
 
+def p_norm(coords, p):
+    """
+    Return the p-norm of the list.
+    """
+    return math.pow(sum([math.pow(c, p) for c in coords]), 1.0/p)
+
+def integral_ball(radius, norm=lambda x, y, z: p_norm((x, y, z), 2)):
+    """
+    Given a radius, find all integer coordinates within that radius of the origin
+    in three dimensional Euclidean space (by default).
+    """
+    coord_range = range(-radius, radius+1)
+    brush = [(x, y, z)
+             for x in coord_range
+             for y in coord_range
+             for z in coord_range
+             if norm(x, y, z) <= radius]
+    return brush
+
+def morphological_dilate(pts, radius=2):
+    """
+    Given a list of tuples of integer coordinates, all of the same dimension,
+    dilate the list of points to include all points within the given radius of
+    a point in the input list.
+    """
+    brush = integral_ball(radius)
+    if len(brush) == 1:
+        return pts
+    new_pts = set()
+
+    for p in pts:
+        for b in brush:
+            t = tuple_add(p, b)
+            new_pts.update([t])
+
+    new_pts.update(pts)
+    return list(new_pts)
+
+def morphological_erode(pts, radius=2):
+    """
+    Given a list of tyuples of integer coordinates, all of the same dimension,
+    erode the list of points to include only those points that include every
+    point within radius units of it.
+    """
+    import json
+    brush = integral_ball(radius)
+    if len(brush) == 1:
+        return pts
+
+    orig_pts = dict([(p, True) for p in pts])
+    for p in orig_pts.keys():
+        for b in brush:
+            t = tuple_add(p, b)
+            if t not in orig_pts:
+                orig_pts[p] = False
+                break
+
+    return [p for p, c in orig_pts.iteritems() if c]
+
 def adjacency_vector(position, forward, points):
     """
     Return the vector that points out of what should be the bottom of any
