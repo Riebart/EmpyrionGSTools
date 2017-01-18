@@ -72,6 +72,11 @@ Example usage: `cat mesh.msh | python msh_to_stl.py > mesh.stl`
   - Recommended dimentino mirror: 3
 - FS2 models: http://sectorgame.com/fsfiles/?dir=uploads/Models/
 
+## Conversion resources
+Because models come in a variety of sources, and this tool only imports STL models,
+a site like http://www.ofoct.com/3d-model-file-for-3d-printer-converter/3d-model-file-converter.html 
+or http://www.meshconvert.com/ can be useful for converting from one format to STL.
+
 # References
 - `.msh` file format reference: http://3dcenter.ru/forum/index.php?act=attach&type=post&id=171261
 

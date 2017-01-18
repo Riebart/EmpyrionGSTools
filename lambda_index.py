@@ -5,7 +5,6 @@ Implements a generic function that ingests either a text STL file on stdin,
 or a Lambda event body, and performs the necessary functions.
 """
 
-import os
 import sys
 import time
 import base64
@@ -27,6 +26,7 @@ def lambda_handler(Event, Context):
     dim_mirror = Event['DimensionMirror'] if 'DimensionMirror' in Event else []
     bp_class = Event['BlueprintClass'] if 'BlueprintClass' in Event else 'SV'
     morphological_factors = Event['MorphologicalFactors'] if 'MorphologicalFactors' in Event else None
+    hollow_radius = Event['HollowRadius'] if 'HollowRadius' in Event else None
 
     with open('BlueprintBase/BlueprintBase.epb', 'r') as fp:
         bp_body = fp.read()
@@ -46,18 +46,11 @@ def lambda_handler(Event, Context):
     resolution = longest_dim / float(voxel_dimension)
     sys.stderr.write("Computed spatial resolution in model-space: %f\n" % resolution)
 
-    shm_stat = None
-    try:
-        shm_stat = os.stat('/dev/shm')
-    except OSError as e:
-        if e.errno != 2:
-            raise e
-
     t0 = time.time()
-    if shm_stat is None:
-        pts = empyrion.split_tris(triangles, resolution)
-    else:
+    if empyrion.parallel():
         pts = empyrion.parallel_split_tris(triangles, resolution)
+    else:
+        pts = empyrion.split_tris(triangles, resolution)
     sys.stderr.write("Triangle to point refinement took %s seconds.\n" % str(time.time() - t0))
     sys.stderr.write("Split %d triangles into %d points.\n" % (len(triangles), len(pts)))
 
@@ -72,20 +65,38 @@ def lambda_handler(Event, Context):
 
     if morphological_factors is not None:
         t0 = time.time()
-        pts = empyrion.morphological_dilate(pts, morphological_factors[0])
+        if empyrion.parallel():
+            pts = empyrion.parallel_morphological_dilate(pts, morphological_factors[0])
+        else:
+            pts = empyrion.morphological_dilate(pts, morphological_factors[0])
         sys.stderr.write("Morphological dilation took %s seconds.\n" % str(time.time() - t0))
+        sys.stderr.write("Morphological dilation expanded to %d points.\n" % len(pts))
         t0 = time.time()
-        pts = empyrion.morphological_erode(pts, morphological_factors[1])
+        if empyrion.parallel():
+            pts = empyrion.parallel_morphological_erode(pts, morphological_factors[1])
+        else:
+            pts = empyrion.morphological_erode(pts, morphological_factors[1])
         sys.stderr.write("Morphological erosion took %s seconds.\n" % str(time.time() - t0))
-
+        sys.stderr.write("Morphological erosion reduced to %d points.\n" % len(pts))
 
     t0 = time.time()
     smoothed_pts = empyrion.smooth_pts(pts)
-    mapped_blocks = empyrion.map_to_empyrion_codes(smoothed_pts)
     sys.stderr.write("Voxel smoothing took %s seconds.\n" % str(time.time() - t0))
-    sys.stderr.write("Smoothed %d voxels into %d blocks.\n" % (len(pts), len(mapped_blocks)))
+    sys.stderr.write("Smoothed %d voxels into %d blocks.\n" % (len(pts), len(smoothed_pts)))
+
+    if hollow_radius is not None:
+        t0 = time.time()
+        if empyrion.parallel():
+            passing_blocks = empyrion.hollow(smoothed_pts.keys(), hollow_radius)
+        else:
+            passing_blocks = empyrion.hollow(smoothed_pts, hollow_radius)
+        # The passing blocks are all of the block coordinates we should keep
+        smoothed_pts = dict([(c, smoothed_pts[c]) for c in passing_blocks])
+        sys.stderr.write("Model hollowing took %s seconds.\n" % str(time.time() - t0))
+        sys.stderr.write("Hollowed down to %d blocks.\n" % len(smoothed_pts))
 
     t0 = time.time()
+    mapped_blocks = empyrion.map_to_empyrion_codes(smoothed_pts)
     new_bp = empyrion.build_new_bp(bp_body, mapped_blocks, bp_class)
     sys.stderr.write("Blueprint generation took %s seconds.\n" % str(time.time() - t0))
     sys.stderr.write("Resulting blueprint size: %d bytes\n" % len(new_bp))
@@ -151,10 +162,19 @@ if __name__ == "__main__":
             help="""A positive integer value indicating how much morphological smoothing/filling
             to do. If given as two positive integer values separated by a comma, the first value
             will be used for dilation, and the second value will be used for erosion.""")
+        parser.add_argument(
+            "--hollow-radius",
+            required=False,
+            default=None,
+            type=int,
+            help="""A positive integer value indicating how much hollowing to perform
+            after the smoothing process. Best used in conjunction with morphological
+            smoothing to hollow out filled interiors. Larger values result in thicker
+            walls.""")
         pargs = parser.parse_args()
 
         if pargs.stl_file is not None:
-            with open(pargs.stl_file, 'r') as fp:
+            with open(pargs.stl_file, 'rb') as fp:
                 input_data = fp.read()
 
         if pargs.morphological_factors is not None:
@@ -173,12 +193,13 @@ if __name__ == "__main__":
                              if pargs.blueprint_size > 0 else 25,
             'BlueprintClass': pargs.blueprint_class
                               if pargs.blueprint_class in ['HV', 'SV', 'CV', 'BA'] else 'SV',
-            'MorphologicalFactors': m_factors
+            'MorphologicalFactors': m_factors,
+            'HollowRadius': pargs.hollow_radius
         }
         new_bp_64 = lambda_handler(lambda_body, None)
 
     if pargs is not None and pargs.blueprint_output_file is not None:
-        with open(pargs.blueprint_output_file, 'w') as fp:
+        with open(pargs.blueprint_output_file, 'wb') as fp:
             fp.write(base64.b64decode(new_bp_64))
     else:
         print base64.b64decode(new_bp_64)

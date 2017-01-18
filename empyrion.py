@@ -8,6 +8,7 @@ For now, only a Steel cube block is used.
 Also implements reading from STL files, and performing the point refinement.
 """
 
+import os
 import sys
 import math
 import time
@@ -296,7 +297,7 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
         while not output_queue.empty():
             pipe_pts = output_queue.get()
             finished_procs += 1
-            sys.stderr.write("Pulled %d points from the pipe (%d/%d)\n" % (len(pipe_pts), finished_procs, len(procs)))
+            sys.stderr.write("%d (%d/%d) " % (len(pipe_pts), finished_procs, len(procs)))
             pts.update(pipe_pts)
 
         # Rebuild the running processes list to only include those still alive
@@ -318,7 +319,8 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
     while not output_queue.empty():
         pts.update(output_queue.get())
         finished_procs += 1
-        sys.stderr.write("Pulled %d pts from the pipe (%d/%d)\n" % (len(pipe_pts), finished_procs, len(procs)))
+        sys.stderr.write("%d (%d/%d) " % (len(pipe_pts), finished_procs, len(procs)))
+    sys.stderr.write("\n")
 
     return list(pts)
 
@@ -380,7 +382,91 @@ def integral_ball(radius, norm=lambda x, y, z: p_norm((x, y, z), 2)):
              if norm(x, y, z) <= radius]
     return brush
 
-def morphological_dilate(pts, radius=2):
+def parallel():
+    shm_stat = None
+    try:
+        shm_stat = os.stat('/dev/shm')
+    except OSError as e:
+        if e.errno != 2:
+            raise e
+    return shm_stat is not None
+
+def parallel_hollow(pts, radius=1):
+    """
+    Perform model hollowing in parallel across cpu_count() processes.
+    """
+    return list_parallelize(pts, (radius, pts), hollow)
+
+def hollow(pts, radius=1, all_pts=None, output_queue=None):
+    """
+    Perform inverted morphological erosion, by keeping all blocks that would have
+    failed the erosion test, and discarding all blocks that would have passed the
+    erosion test.
+    """
+    if all_pts is None:
+        all_pts = pts
+
+    brush = integral_ball(radius)
+    if len(brush) == 1:
+        return pts
+
+    orig_pts = dict([(p, False) for p in all_pts])
+    for p in orig_pts.keys():
+        for b in brush:
+            t = tuple_add(p, b)
+            if t not in orig_pts:
+                orig_pts[p] = True
+                break
+
+    ret = [p for p, c in orig_pts.iteritems() if c]
+    if output_queue is not None:
+        output_queue.put(ret)
+    return ret
+
+def list_parallelize(items, args, func):
+    """
+    Given a list of items, some additional arguments, and a function to call,
+    call that function like map but with chosen arguments using Process()
+    objects. Assume that the function given takes in a Queue() as a final argument.
+    """
+    items_per_proc = int(math.ceil(1.0 * len(items) / multiprocessing.cpu_count()))
+    item_chunks = [items[i:i + items_per_proc] for i in xrange(0, len(items), items_per_proc)]
+    output_queue = multiprocessing.Queue()
+    procs = [multiprocessing.Process(target=func,
+                                     args=(chunk,) + args + (output_queue,))
+             for chunk in item_chunks]
+
+    for p in procs:
+        p.start()
+    running_procs = [p for p in procs]
+
+    ret = set()
+    while len(running_procs) > 0:
+        for p in running_procs:
+            p.join(0.0)
+        while not output_queue.empty():
+            ret.update(output_queue.get())
+        time.sleep(0.25)
+        running_procs = [p for p in running_procs if p.is_alive()]
+
+    while not output_queue.empty():
+        ret.update(output_queue.get())
+
+    return list(ret)
+
+def parallel_morphological_dilate(pts, radius=2):
+    """
+    Perform morphological dilation in parallel across cpu_count() processes.
+    """
+    return list_parallelize(pts, (radius,), morphological_dilate)
+
+def parallel_morphological_erode(pts, radius=2):
+    """
+    Perform morphological erosion in parallel across cpu_count() processes.
+    """
+    return list_parallelize(pts, (radius, pts), morphological_erode)
+
+def morphological_dilate(pts, radius=2, output_queue=None):
     """
     Given a list of tuples of integer coordinates, all of the same dimension,
     dilate the list of points to include all points within the given radius of
@@ -397,28 +483,36 @@ def morphological_dilate(pts, radius=2):
             new_pts.update([t])
 
     new_pts.update(pts)
-    return list(new_pts)
+    ret = list(new_pts)
+    if output_queue is not None:
+        output_queue.put(ret)
+    return ret
 
-def morphological_erode(pts, radius=2):
+def morphological_erode(pts, radius=2, all_pts=None, output_queue=None):
     """
     Given a list of tyuples of integer coordinates, all of the same dimension,
     erode the list of points to include only those points that include every
     point within radius units of it.
     """
-    import json
+    if all_pts is None:
+        all_pts = pts
+
     brush = integral_ball(radius)
     if len(brush) == 1:
         return pts
 
-    orig_pts = dict([(p, True) for p in pts])
-    for p in orig_pts.keys():
+    orig_pts = dict([(p, True) for p in all_pts])
+    for p in pts:
         for b in brush:
             t = tuple_add(p, b)
             if t not in orig_pts:
                 orig_pts[p] = False
                 break
 
-    return [p for p, c in orig_pts.iteritems() if c]
+    ret = [p for p in pts if orig_pts[p]]
+    if output_queue is not None:
+        output_queue.put(ret)
+    return ret
 
 def adjacency_vector(position, forward, points):
     """
@@ -457,7 +551,6 @@ def slope_check_single(position, forward, points):
 
     perpendicular_vectors = [v for v in UNIT_VECTORS if
                              tuple_dot(v, forward) == 0 and v != down_vec]
-    # sys.stderr.write("%s %s %s    %s\n" % (str(position), str(forward), str(down_vec), str(perpendicular_vectors)))
 
     # For each unit vector that is perpendicular to the forward vector, move up
     # to the maximum slope length along the forward vector, checking all around
