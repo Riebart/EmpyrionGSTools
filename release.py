@@ -1,9 +1,12 @@
 import sys
 import zipfile
 import StringIO
+import subprocess
 
 
 def __main():
+    subprocess.check_call(
+        ('pyinstaller', '--clean', '--onefile', 'lambda_index.py'))
     sso = StringIO.StringIO()
     zfile = zipfile.ZipFile(sso, 'w', zipfile.ZIP_DEFLATED)
     zfile.write("EGS-GUI/EGS-GUI/bin/Release/EGS-GUI.exe", "EGS-GUI.exe")
