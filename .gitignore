@@ -1,5 +1,11 @@
 Models/*
 .vs/*
+.vscode/*
+build/*
+dist/*
+
+lambda_index.spec
+
 *sln
 *pyproj
 *7z
