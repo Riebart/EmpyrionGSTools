@@ -43,6 +43,18 @@ def lambda_handler(event, _):
     bounds = empyrion.triangle_list_bounds(triangles)
     sys.stderr.write("Model bounds: %s\n" % str(bounds))
 
+    # To assist with ensuring symmetry, shift the points so that the centroid
+    # of the model is at the origin. Find the midpoint along each of dimensions
+    # of the cube spanned by the bounds of the model, and subtract that midpoint
+    # from each triangle coordinate.
+    origin_offset = [-sum(b)/2 for b in bounds]
+    for t in triangles:
+        t.shift(origin_offset)
+    
+    # For clarity, show the transpose model bounds, which should be symmetric.
+    bounds = empyrion.triangle_list_bounds(triangles)
+    sys.stderr.write("Translated model bounds: %s\n" % str(bounds))
+
     # First, see if the voxel_dimension is s list, and if it isn't use the
     # longest dimension.
     if isinstance(voxel_dimension, list):
@@ -234,7 +246,11 @@ def __main():
             action='store_true',
             help="""Disable the addition of slanted or other non-cube blocks to the
             resulting voxel model.""")
-        parser.add_argument("--corner-blocks",action='store_true',default=False,help="""Whether or not corner blocks should be added when the choice and
+        parser.add_argument(
+            "--corner-blocks",
+            action='store_true',
+            default=False,
+            help="""Whether or not corner blocks should be added when the choice and
             placement are unambiguous.""")
         pargs = parser.parse_args()
 

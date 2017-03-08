@@ -72,6 +72,11 @@ class Triple(object):
             Triple(mp3, self.z, centroid),
         ]
 
+    def shift(self, offset):
+        self.x = Triple(*TUPLE_ADD(self.x, offset))
+        self.y = Triple(*TUPLE_ADD(self.y, offset))
+        self.z = Triple(*TUPLE_ADD(self.z, offset))
+
 
 class STLFile(object):
     """
