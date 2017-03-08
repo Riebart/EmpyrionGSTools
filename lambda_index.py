@@ -47,10 +47,10 @@ def lambda_handler(event, _):
     # of the model is at the origin. Find the midpoint along each of dimensions
     # of the cube spanned by the bounds of the model, and subtract that midpoint
     # from each triangle coordinate.
-    origin_offset = [-sum(b)/2 for b in bounds]
+    origin_offset = [-sum(b) / 2 for b in bounds]
     for t in triangles:
         t.shift(origin_offset)
-    
+
     # For clarity, show the transpose model bounds, which should be symmetric.
     bounds = empyrion.triangle_list_bounds(triangles)
     sys.stderr.write("Translated model bounds: %s\n" % str(bounds))
@@ -257,6 +257,10 @@ def __main():
         if pargs.stl_file is not None:
             with open(pargs.stl_file, 'rb') as fp:
                 input_data = fp.read()
+
+        if input_data is None:
+            sys.stderr.write("")
+            return
 
         if pargs.morphological_factors is not None:
             m_factors = [

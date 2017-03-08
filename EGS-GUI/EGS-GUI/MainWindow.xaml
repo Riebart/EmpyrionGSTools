@@ -1,0 +1,52 @@
+﻿<Window x:Class="EGS_GUI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:EGS_GUI"
+        mc:Ignorable="d"
+        Title="EmpyrionGS Tools GUI" Height="360" Width="535" SizeChanged="Window_SizeChanged">
+    <Grid>
+        <TextBox x:Name="commandOutputTxt" HorizontalAlignment="Left" Height="275" Margin="346,36,0,0" TextWrapping="Wrap" VerticalAlignment="Top" Width="163" FontSize="10" ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+        <Label x:Name="label" Content="Command output" HorizontalAlignment="Left" Margin="346,10,0,0" VerticalAlignment="Top"/>
+        <Label x:Name="label_Copy" Content="Command options" HorizontalAlignment="Left" Margin="10,10,0,0" VerticalAlignment="Top"/>
+        <Label x:Name="label1" Content="STL File" HorizontalAlignment="Left" Margin="10,41,0,0" VerticalAlignment="Top" FontSize="10"/>
+        <TextBox x:Name="stlInputTxt" HorizontalAlignment="Left" Height="23" Margin="52,43,0,0" TextWrapping="NoWrap"  Text="Click to open file dialog" VerticalAlignment="Top" Width="281" FontSize="10" MouseDoubleClick="textBox1_Copy_MouseDoubleClick"/>
+        <Label x:Name="label1_Copy" Content="Output Blueprint File" HorizontalAlignment="Left" Margin="10,66,0,0" VerticalAlignment="Top" FontSize="10"/>
+        <TextBox x:Name="bpOutputTxt" HorizontalAlignment="Left" Height="23" Margin="112,68,0,0" TextWrapping="NoWrap" Text="Click to open file dialog" VerticalAlignment="Top" Width="221" FontSize="10" MouseDoubleClick="textBox1_Copy_MouseDoubleClick"/>
+        <Label x:Name="label1_Copy1" Content="Blueprint Size" HorizontalAlignment="Left" Margin="10,94,0,0" VerticalAlignment="Top" FontSize="10"/>
+        <TextBox x:Name="bpSizeTxt" HorizontalAlignment="Left" Height="23" Margin="198,98,0,0" TextWrapping="NoWrap" Text="25" VerticalAlignment="Top" Width="54" FontSize="10"/>
+        <RadioButton x:Name="longestRad" GroupName="DimensionType" Content="Longest Dimension" HorizontalAlignment="Left" Margin="85,95,0,0" VerticalAlignment="Top" FontSize="10" IsChecked="True"/>
+        <RadioButton x:Name="specifiedRad" GroupName="DimensionType" Content="Specified Dimension" HorizontalAlignment="Left" Margin="85,110,0,0" VerticalAlignment="Top" FontSize="10" Checked="radioButton_Copy_Checked" Unchecked="radioButton_Copy_Checked"/>
+        <RadioButton x:Name="xDimRadio" GroupName="SelectedDimension" Content="X" HorizontalAlignment="Left" Margin="104,124,0,0" VerticalAlignment="Top" FontSize="10" IsEnabled="False" IsChecked="True"/>
+        <RadioButton x:Name="yDimRadio" GroupName="SelectedDimension" Content="Y" HorizontalAlignment="Left" Margin="133,124,0,0" VerticalAlignment="Top" FontSize="10" IsEnabled="False"/>
+        <RadioButton x:Name="zDimRadio" GroupName="SelectedDimension" Content="Z" HorizontalAlignment="Left" Margin="163,124,0,0" VerticalAlignment="Top" FontSize="10" IsEnabled="False"/>
+        <Label x:Name="label1_Copy2" Content="Dimension Remapping" HorizontalAlignment="Left" Margin="10,172,0,0" VerticalAlignment="Top" FontSize="10"/>
+        <TextBox x:Name="dimRemapTxt" HorizontalAlignment="Left" Height="23" Margin="120,174,0,0" TextWrapping="NoWrap" VerticalAlignment="Top" Width="56" FontSize="10"/>
+        <Label x:Name="label1_Copy3" Content="Dimension Mirror" HorizontalAlignment="Left" Margin="181,172,0,0" VerticalAlignment="Top" FontSize="10"/>
+        <TextBox x:Name="dimMirrorTxt" HorizontalAlignment="Left" Height="23" Margin="268,174,0,0" TextWrapping="NoWrap" Text="" VerticalAlignment="Top" Width="65" FontSize="10"/>
+        <Label x:Name="label1_Copy4" Content="Blueprint Class" HorizontalAlignment="Left" Margin="10,143,0,0" VerticalAlignment="Top" FontSize="10"/>
+        <RadioButton x:Name="bpHV" GroupName="BPType" Content="HV" HorizontalAlignment="Left" Margin="85,147,0,0" VerticalAlignment="Top" FontSize="10"/>
+        <RadioButton x:Name="bpSV" GroupName="BPType" Content="SV" HorizontalAlignment="Left" Margin="122,147,0,0" VerticalAlignment="Top" FontSize="10" IsChecked="True"/>
+        <RadioButton x:Name="bpCV" GroupName="BPType" Content="CV" HorizontalAlignment="Left" Margin="157,147,0,0" VerticalAlignment="Top" FontSize="10"/>
+        <RadioButton x:Name="bpBA" GroupName="BPType" Content="BA" HorizontalAlignment="Left" Margin="193,147,0,0" VerticalAlignment="Top" FontSize="10"/>
+        <Label x:Name="label1_Copy5" Content="Morphological Smoothing" HorizontalAlignment="Left" Margin="10,202,0,0" VerticalAlignment="Top" FontSize="10" />
+        <CheckBox x:Name="morphChk" Content="" HorizontalAlignment="Left" Margin="136,207,0,0" VerticalAlignment="Top" Checked="morphChk_Checked" Unchecked="morphChk_Checked"/>
+        <TextBox x:Name="dilationTxt" HorizontalAlignment="Left" Height="23" Margin="206,202,0,0" TextWrapping="Wrap" Text="5" VerticalAlignment="Top" Width="120" IsEnabled="False"/>
+        <TextBox x:Name="erosionTxt" HorizontalAlignment="Left" Height="23" Margin="206,230,0,0" TextWrapping="Wrap" Text="5" VerticalAlignment="Top" Width="120" IsEnabled="False"/>
+        <Label x:Name="label1_Copy6" Content="Dilation" HorizontalAlignment="Left" Margin="161,202,0,0" VerticalAlignment="Top" FontSize="10" />
+        <Label x:Name="label1_Copy7" Content="Erosion" HorizontalAlignment="Left" Margin="163,228,0,0" VerticalAlignment="Top" FontSize="10" />
+        <Label x:Name="label1_Copy8" Content="Hollowing Radius" HorizontalAlignment="Left" Margin="14,258,0,0" VerticalAlignment="Top" FontSize="10" />
+        <TextBox x:Name="hollowTxt" HorizontalAlignment="Left" Height="23" Margin="120,260,0,0" TextWrapping="Wrap" Text="1" VerticalAlignment="Top" Width="32" IsEnabled="False"/>
+        <CheckBox x:Name="hollowChk" Content="" HorizontalAlignment="Left" Margin="101,260,0,0" VerticalAlignment="Top" Checked="hollowChk_Checked" Unchecked="hollowChk_Checked"/>
+        <Label x:Name="label1_Copy9" Content="Smoothing Blocks" HorizontalAlignment="Left" Margin="181,258,0,0" VerticalAlignment="Top" FontSize="10" />
+        <CheckBox x:Name="smoothingChk" Content="" HorizontalAlignment="Left" Margin="268,260,0,0" VerticalAlignment="Top" IsChecked="True"/>
+        <Button x:Name="runBtn" Content="Run" HorizontalAlignment="Left" Margin="258,293,0,0" VerticalAlignment="Top" Width="75" Click="runBtn_Click"/>
+        <Button x:Name="helpBtn" Content="Help" HorizontalAlignment="Left" Margin="10,291,0,0" VerticalAlignment="Top" Width="75" Click="helpBtn_Click"/>
+        <Label x:Name="label2" Content="Resize the window to see more output" HorizontalAlignment="Left" Margin="101,310,0,-0.333" VerticalAlignment="Top" FontSize="8"/>
+        <!--<ScrollViewer x:Name="commandOutputScroll" HorizontalAlignment="Left" Height="280" Margin="350,41,0,0" VerticalAlignment="Top" Width="168">
+            <TextBlock x:Name="commandOutputTxt" TextWrapping="Wrap" Text="" FontSize="10"/>
+        </ScrollViewer>-->
+
+    </Grid>
+</Window>
