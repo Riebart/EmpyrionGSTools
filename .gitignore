@@ -1,4 +1,7 @@
 Models/*
+.vs/*
+*sln
+*pyproj
 *7z
 *rar
 *obj
@@ -11,3 +14,4 @@ Models/*
 *pyc
 
 *epb
+*.suo

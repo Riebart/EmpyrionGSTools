@@ -12,38 +12,29 @@ import StringIO
 import empyrion
 
 
-def isfloat(v):
-    try:
-        f = float(v)
-        return f
-    except:
-        return None
-
-
-def lambda_handler(Event, Context):
+def lambda_handler(event, _):
     """
     Given a Lambda event body, ready the STL file and generate a new blueprint
     based on the parameters.
     """
-    stl_body = base64.b64decode(Event['STLBody'])
-    disable_smoothing = Event.get('DisableSmoothing', False)
-    voxel_dimension = Event['BlueprintSize'] if 'BlueprintSize' in Event else 25
-    dim_remap = Event[
-        'DimensionRemap'] if 'DimensionRemap' in Event else [1, 2, 3]
-    dim_mirror = Event['DimensionMirror'] if 'DimensionMirror' in Event else []
-    bp_class = Event['BlueprintClass'] if 'BlueprintClass' in Event else 'SV'
-    morphological_factors = Event[
-        'MorphologicalFactors'] if 'MorphologicalFactors' in Event else None
-    hollow_radius = Event['HollowRadius'] if 'HollowRadius' in Event else None
+    stl_body = base64.b64decode(event['STLBody'])
+    disable_smoothing = event.get('DisableSmoothing', False)
+    corner_blocks = event.get('CornerBlocks', False)
+    voxel_dimension = event.get('BlueprintSize', 25)
+    dim_remap = event.get('DimensionRemap', [1, 2, 3])
+    dim_mirror = event.get('DimensionMirror', [])
+    bp_class = event.get('BlueprintClass', 'SV')
+    morphological_factors = event.get('MorphologicalFactors', None)
+    hollow_radius = event.get('HollowRadius', None)
 
     with open('BlueprintBase/BlueprintBase.epb', 'r') as fp:
         bp_body = fp.read()
 
     ssi = StringIO.StringIO(stl_body)
-    t0 = time.time()
+    timer_start = time.time()
     triangles = empyrion.STLFile.read_triangles(ssi)
     sys.stderr.write("Reading model took %s seconds.\n" %
-                     str(time.time() - t0))
+                     str(time.time() - timer_start))
     sys.stderr.write("Model has %d triangles\n" % len(triangles))
 
     if len(triangles) == 0:
@@ -59,58 +50,58 @@ def lambda_handler(Event, Context):
         resolution = (bounds[dim - 1][1] - bounds[dim - 1][0]) / (size - 1)
     else:
         longest_dim = max([i[1] - i[0] for i in bounds])
-        resolution = longest_dim / (abs(float(voxel_dimension)) - 1)
+        resolution = longest_dim / (abs(voxel_dimension) - 1)
 
     sys.stderr.write("Computed spatial resolution in model-space: %f\n" %
                      resolution)
 
-    t0 = time.time()
+    timer_start = time.time()
     if empyrion.parallel():
         pts = empyrion.parallel_split_tris(triangles, resolution)
     else:
         pts = empyrion.split_tris(triangles, resolution)
     sys.stderr.write("Triangle to point refinement took %s seconds.\n" %
-                     str(time.time() - t0))
+                     str(time.time() - timer_start))
     sys.stderr.write("Split %d triangles into %d points.\n" %
                      (len(triangles), len(pts)))
 
     # Mirror the dimensions listed. For each dimension, just negate the coordinates
     # of all points in that dimension
-    t0 = time.time()
+    timer_start = time.time()
     pts = [tuple([p[dim_remap[i] - 1] for i in range(3)]) for p in pts]
     tuple_mul = lambda t1, t2: (t1[0] * t2[0], t1[1] * t2[1], t1[2] * t2[2])
     dim_mirror_tuple = [-1 if i + 1 in dim_mirror else 1 for i in range(3)]
     pts = [tuple_mul(dim_mirror_tuple, p) for p in pts]
     sys.stderr.write("Dimension mirroring and remapping took %s seconds.\n" %
-                     str(time.time() - t0))
+                     str(time.time() - timer_start))
 
     if morphological_factors is not None:
-        t0 = time.time()
+        timer_start = time.time()
         if empyrion.parallel():
             pts = empyrion.parallel_morphological_dilate(
                 pts, morphological_factors[0])
         else:
             pts = empyrion.morphological_dilate(pts, morphological_factors[0])
         sys.stderr.write("Morphological dilation took %s seconds.\n" %
-                         str(time.time() - t0))
+                         str(time.time() - timer_start))
         sys.stderr.write("Morphological dilation expanded to %d points.\n" %
                          len(pts))
-        t0 = time.time()
+        timer_start = time.time()
         if empyrion.parallel():
             pts = empyrion.parallel_morphological_erode(
                 pts, morphological_factors[1])
         else:
             pts = empyrion.morphological_erode(pts, morphological_factors[1])
         sys.stderr.write("Morphological erosion took %s seconds.\n" %
-                         str(time.time() - t0))
+                         str(time.time() - timer_start))
         sys.stderr.write("Morphological erosion reduced to %d points.\n" %
                          len(pts))
 
-    t0 = time.time()
     if not disable_smoothing:
+        timer_start = time.time()
         smoothed_pts = empyrion.smooth_pts(pts)
         sys.stderr.write("Voxel smoothing took %s seconds.\n" %
-                         str(time.time() - t0))
+                         str(time.time() - timer_start))
         sys.stderr.write("Smoothed %d voxels into %d blocks.\n" %
                          (len(pts), len(smoothed_pts)))
     else:
@@ -118,8 +109,16 @@ def lambda_handler(Event, Context):
         # all cubes.
         smoothed_pts = dict([(p, 0) for p in pts])
 
+    if corner_blocks:
+        timer_start = time.time()
+        pre_corner_count = len(smoothed_pts)
+        smoothed_pts = empyrion.fill_corners(smoothed_pts)
+        sys.stderr.write("Filled in %d corner blocks in %s seconds.\n" %
+                         (len(smoothed_pts) - pre_corner_count,
+                          str(time.time() - timer_start)))
+
     if hollow_radius is not None:
-        t0 = time.time()
+        timer_start = time.time()
         if empyrion.parallel():
             passing_blocks = empyrion.hollow(smoothed_pts.keys(),
                                              hollow_radius)
@@ -128,14 +127,14 @@ def lambda_handler(Event, Context):
         # The passing blocks are all of the block coordinates we should keep
         smoothed_pts = dict([(c, smoothed_pts[c]) for c in passing_blocks])
         sys.stderr.write("Model hollowing took %s seconds.\n" %
-                         str(time.time() - t0))
+                         str(time.time() - timer_start))
         sys.stderr.write("Hollowed down to %d blocks.\n" % len(smoothed_pts))
 
-    t0 = time.time()
+    timer_start = time.time()
     mapped_blocks = empyrion.map_to_empyrion_codes(smoothed_pts)
     new_bp = empyrion.build_new_bp(bp_body, mapped_blocks, bp_class)
     sys.stderr.write("Blueprint generation took %s seconds.\n" %
-                     str(time.time() - t0))
+                     str(time.time() - timer_start))
     sys.stderr.write("Resulting blueprint size: %d bytes\n" % len(new_bp))
 
     return base64.b64encode(new_bp)
@@ -146,7 +145,8 @@ def blueprint_size(v):
         iv = int(v)
         if iv < 1:
             raise ValueError("Dimension size must be at least 1")
-    except:
+        return iv
+    except ValueError:
         dimS, sizeS = v.split(',')
         dim = int(dimS)
         size = int(sizeS)
@@ -157,7 +157,7 @@ def blueprint_size(v):
         return [dim, size]
 
 
-if __name__ == "__main__":
+def __main():
     import json
     import argparse
 
@@ -234,6 +234,8 @@ if __name__ == "__main__":
             action='store_true',
             help="""Disable the addition of slanted or other non-cube blocks to the
             resulting voxel model.""")
+        parser.add_argument("--corner-blocks",action='store_true',default=False,help="""Whether or not corner blocks should be added when the choice and
+            placement are unambiguous.""")
         pargs = parser.parse_args()
 
         if pargs.stl_file is not None:
@@ -250,17 +252,25 @@ if __name__ == "__main__":
             m_factors = None
 
         lambda_body = {
-            'STLBody': base64.b64encode(input_data),
-            'DisableSmoothing': pargs.disable_smoothing,
+            'STLBody':
+            base64.b64encode(input_data),
+            'DisableSmoothing':
+            pargs.disable_smoothing,
+            'CornerBlocks':
+            pargs.corner_blocks,
             'DimensionRemap':
             [int(d) for d in pargs.dimension_remap.split(",")],
             'DimensionMirror':
             [int(p) for p in pargs.dimension_mirror.split(',') if p != ""],
-            'BlueprintSize': pargs.blueprint_size,
-            'BlueprintClass': pargs.blueprint_class
+            'BlueprintSize':
+            pargs.blueprint_size,
+            'BlueprintClass':
+            pargs.blueprint_class
             if pargs.blueprint_class in ['HV', 'SV', 'CV', 'BA'] else 'SV',
-            'MorphologicalFactors': m_factors,
-            'HollowRadius': pargs.hollow_radius
+            'MorphologicalFactors':
+            m_factors,
+            'HollowRadius':
+            pargs.hollow_radius
         }
         new_bp_64 = lambda_handler(lambda_body, None)
 
@@ -268,4 +278,8 @@ if __name__ == "__main__":
         with open(pargs.blueprint_output_file, 'wb') as fp:
             fp.write(base64.b64decode(new_bp_64))
     else:
-        print base64.b64decode(new_bp_64)
+        sys.stdout.write(base64.b64decode(new_bp_64))
+
+
+if __name__ == "__main__":
+    __main()

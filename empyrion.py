@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 """
 More complex script that converts locations in 3D space into a Blueprint
 dense filled matrix/block types.
@@ -17,20 +16,28 @@ import StringIO
 import zipfile
 import multiprocessing
 
+# Maximum number of points to attempt to generate per process, for memory bounding
+# purposes.
+MAX_POINTS_PER_PROCESS = 2000.0
+
 # Build the list of unit vetors
-UNIT_VECTORS = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
+UNIT_VECTORS = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0,
+                                                                          -1)]
 # Valid slopes, expressed as 1/m = the number of blocks required to complete the slope.
 VALID_SLOPES = [1, 2]
 
-tuple_dot = lambda t1, t2: sum([a*b for a,b in zip(t1,t2)])
-tuple_add = lambda t1, t2: (t1[0]+t2[0],t1[1]+t2[1],t1[2]+t2[2])
-tuple_scale = lambda a, t: (a*t[0],a*t[1],a*t[2])
+TUPLE_DOT = lambda t1, t2: sum([a * b for a, b in zip(t1, t2)])
+TUPLE_ADD = lambda t1, t2: (t1[0] + t2[0], t1[1] + t2[1], t1[2] + t2[2])
+TUPLE_SUB = lambda t1, t2: (t1[0] - t2[0], t1[1] - t2[1], t1[2] - t2[2])
+TUPLE_SCALE = lambda a, t: (a * t[0], a * t[1], a * t[2])
+
 
 class Triple(object):
     """
     Represents a triple of any object type. Is used to represent a point as well
     as a triangle of points.
     """
+
     def __init__(self, x, y, z):
         self.x = x
         self.y = y
@@ -76,16 +83,16 @@ class STLFile(object):
         """
         Read all triangles from a binary STL file.
         """
-        header = file_descriptor.read(80)
+        _ = file_descriptor.read(80)  # Read the global file header
         ntris = struct.unpack("<L", file_descriptor.read(4))[0]
 
         tris = []
-        for i in range(ntris):
-            normal = struct.unpack("<fff", file_descriptor.read(4*3))
-            v1 = struct.unpack("<fff", file_descriptor.read(4*3))
-            v2 = struct.unpack("<fff", file_descriptor.read(4*3))
-            v3 = struct.unpack("<fff", file_descriptor.read(4*3))
-            attributes = struct.unpack("<H", file_descriptor.read(2))
+        for _ in range(ntris):
+            _ = struct.unpack("<fff", file_descriptor.read(4 * 3))  # Normal
+            v1 = struct.unpack("<fff", file_descriptor.read(4 * 3))
+            v2 = struct.unpack("<fff", file_descriptor.read(4 * 3))
+            v3 = struct.unpack("<fff", file_descriptor.read(4 * 3))
+            _ = struct.unpack("<H", file_descriptor.read(2))  # Attributes
             tris.append(Triple(Triple(*v1), Triple(*v2), Triple(*v3)))
         return tris
 
@@ -96,11 +103,13 @@ class STLFile(object):
         marging the triangles from all solids found in the file.
         """
         _solids = []
-        solid_name, solid_triangles = STLFile.solid_to_triangles(file_descriptor)
+        solid_name, solid_triangles = STLFile.solid_to_triangles(
+            file_descriptor)
         while solid_name is not None:
             sys.stderr.write("Reading solid: %s\n" % solid_name)
             _solids.append((solid_name, solid_triangles))
-            solid_name, solid_triangles = STLFile.solid_to_triangles(file_descriptor)
+            solid_name, solid_triangles = STLFile.solid_to_triangles(
+                file_descriptor)
 
         triangles = [e for s in _solids for e in s[1]]
         return triangles
@@ -152,15 +161,20 @@ class STLFile(object):
             elif line.strip().startswith("vertex"):
                 triangles.append(
                     Triple(
-                        Triple(*[float(i) for i in
-                                 line.strip().split(" ")[1:]]),
-                        Triple(*[float(i) for i in
-                                 file_descriptor.readline().strip().split(" ")[1:]]),
-                        Triple(*[float(i) for i in
-                                 file_descriptor.readline().strip().split(" ")[1:]])
-                    )
-                )
+                        Triple(
+                            * [float(i) for i in line.strip().split(" ")[1:]]),
+                        Triple(* [
+                            float(i)
+                            for i in file_descriptor.readline().strip().split(
+                                " ")[1:]
+                        ]),
+                        Triple(* [
+                            float(i)
+                            for i in file_descriptor.readline().strip().split(
+                                " ")[1:]
+                        ])))
         return (name, triangles)
+
 
 def triangle_list_bounds(tris):
     """
@@ -174,6 +188,7 @@ def triangle_list_bounds(tris):
 
     return bounds
 
+
 def vsub(u, v):
     """
     Vector subtraction.
@@ -183,6 +198,9 @@ def vsub(u, v):
 
 
 def l2_norm(v):
+    """
+    Return the L2 norm of the vector.
+    """
     return math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
     #return math.sqrt(sum([i*i for i in v]))
 
@@ -249,6 +267,7 @@ def rescale_round_point(Point, Resolution):
     return (int(round(Point.x / Resolution)), int(round(Point.y / Resolution)),
             int(round(Point.z / Resolution)))
 
+
 def parallel_split_tris(Primitives, Resolution, BatchSize=100):
     """
     Perform the split_tris() operation on chunks of primitives in parallel, and
@@ -259,25 +278,32 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
     # on the number of points generated.
     size = [i[1] - i[0] for i in triangle_list_bounds(Primitives)]
     # Primitives per unit cube of volume, approximately.
-    prims_per_unit3 = len(Primitives) / (size[0]* size[1] * size[2])
+    prims_per_unit3 = len(Primitives) / (size[0] * size[1] * size[2])
     # Resolution is essentially units-per-point, so dimensional analysis gives...
-    points_per_prim = 1.0 / math.pow((Resolution**3 * prims_per_unit3), 1.0/3)
-    MAX_POINTS_PER_PROCESS = 2000.0
-    prims_per_process = int(math.ceil(MAX_POINTS_PER_PROCESS / points_per_prim))
+    points_per_prim = 1.0 / math.pow((Resolution**3 * prims_per_unit3),
+                                     1.0 / 3)
+    prims_per_process = int(
+        math.ceil(MAX_POINTS_PER_PROCESS / points_per_prim))
 
     # The prims_per_process should be at most enough so that there are more
     # processes than CPUs.
-    prims_per_process = min(int(math.floor(len(Primitives) / (3 * multiprocessing.cpu_count()))),
-                            prims_per_process)
-    sys.stderr.write("Approximate number of points generated per process: %s\n" %
-                     (points_per_prim * prims_per_process))
+    prims_per_process = min(
+        int(math.floor(len(Primitives) / (3 * multiprocessing.cpu_count()))),
+        prims_per_process)
+    sys.stderr.write("Approximate number of points generated per process: %s\n"
+                     % (points_per_prim * prims_per_process))
 
-    primitive_chunks = [Primitives[i:i + prims_per_process]
-                        for i in xrange(0, len(Primitives), prims_per_process)]
+    primitive_chunks = [
+        Primitives[i:i + prims_per_process]
+        for i in xrange(0, len(Primitives), prims_per_process)
+    ]
     output_queue = multiprocessing.Queue()
-    procs = [multiprocessing.Process(target=split_tris,
-                                     args=(chunk, Resolution, BatchSize, output_queue))
-             for chunk in primitive_chunks]
+    procs = [
+        multiprocessing.Process(
+            target=split_tris,
+            args=(chunk, Resolution, BatchSize, output_queue))
+        for chunk in primitive_chunks
+    ]
     sys.stderr.write("Prepared %d processes of work\n" % len(procs))
 
     # First, start cpu_count() processes.
@@ -297,14 +323,16 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
         while not output_queue.empty():
             pipe_pts = output_queue.get()
             finished_procs += 1
-            sys.stderr.write("%d (%d/%d) " % (len(pipe_pts), finished_procs, len(procs)))
+            sys.stderr.write("%d (%d/%d) " %
+                             (len(pipe_pts), finished_procs, len(procs)))
             pts.update(pipe_pts)
 
         # Rebuild the running processes list to only include those still alive
         running_procs = [p for p in running_procs if p.is_alive()]
 
         # If there are fewer running processes than available CPUs, start some more.
-        pending_procs = queued_procs[:multiprocessing.cpu_count() - len(running_procs)]
+        pending_procs = queued_procs[:multiprocessing.cpu_count() - len(
+            running_procs)]
         for p in pending_procs:
             p.start()
         # Once started, add them to the pending procs, and remove them from the
@@ -319,10 +347,12 @@ def parallel_split_tris(Primitives, Resolution, BatchSize=100):
     while not output_queue.empty():
         pts.update(output_queue.get())
         finished_procs += 1
-        sys.stderr.write("%d (%d/%d) " % (len(pipe_pts), finished_procs, len(procs)))
+        sys.stderr.write("%d (%d/%d) " %
+                         (len(pipe_pts), finished_procs, len(procs)))
     sys.stderr.write("\n")
 
     return list(pts)
+
 
 def split_tris(Primitives, Resolution, BatchSize=100, OutputQueue=None):
     """
@@ -355,32 +385,33 @@ def split_tris(Primitives, Resolution, BatchSize=100, OutputQueue=None):
     pts.update([
         rescale_round_point(t[i], Resolution) for i in range(3) for t in tris
     ])
-    pts = list(pts)
+    pts_l = list(pts)
 
     # LEGACY: Super slow on pypy (2x CPython), included for posterity and entertainment.
     #pts = list(set([ rescale_round_point(t[i], Resolution) for i in range(3) for t in tris ]))
     if OutputQueue is not None:
-        OutputQueue.put(pts)
-    return pts
+        OutputQueue.put(pts_l)
+    return pts_l
+
 
 def p_norm(coords, p):
     """
     Return the p-norm of the list.
     """
-    return math.pow(sum([math.pow(c, p) for c in coords]), 1.0/p)
+    return math.pow(sum([math.pow(c, p) for c in coords]), 1.0 / p)
+
 
 def integral_ball(radius, norm=lambda x, y, z: p_norm((x, y, z), 2)):
     """
     Given a radius, find all integer coordinates within that radius of the origin
     in three dimensional Euclidean space (by default).
     """
-    coord_range = range(-radius, radius+1)
+    coord_range = range(-radius, radius + 1)
     brush = [(x, y, z)
-             for x in coord_range
-             for y in coord_range
-             for z in coord_range
+             for x in coord_range for y in coord_range for z in coord_range
              if norm(x, y, z) <= radius]
     return brush
+
 
 def parallel():
     shm_stat = None
@@ -391,11 +422,13 @@ def parallel():
             raise e
     return shm_stat is not None
 
+
 def parallel_hollow(pts, radius=1):
     """
     Perform model hollowing in parallel across cpu_count() processes.
     """
     return list_parallelize(pts, (radius, pts), hollow)
+
 
 def hollow(pts, radius=1, all_pts=None, output_queue=None):
     """
@@ -413,7 +446,7 @@ def hollow(pts, radius=1, all_pts=None, output_queue=None):
     orig_pts = dict([(p, False) for p in all_pts])
     for p in orig_pts.keys():
         for b in brush:
-            t = tuple_add(p, b)
+            t = TUPLE_ADD(p, b)
             if t not in orig_pts:
                 orig_pts[p] = True
                 break
@@ -423,18 +456,25 @@ def hollow(pts, radius=1, all_pts=None, output_queue=None):
         output_queue.put(ret)
     return ret
 
+
 def list_parallelize(items, args, func):
     """
     Given a list of items, some additional arguments, and a function to call,
     call that function like map but with chosen arguments using Process()
     objects. Assume that the function given takes in a Queue() as a final argument.
     """
-    items_per_proc = int(math.ceil(1.0 * len(items) / multiprocessing.cpu_count()))
-    item_chunks = [items[i:i + items_per_proc] for i in xrange(0, len(items), items_per_proc)]
+    items_per_proc = int(
+        math.ceil(1.0 * len(items) / multiprocessing.cpu_count()))
+    item_chunks = [
+        items[i:i + items_per_proc]
+        for i in xrange(0, len(items), items_per_proc)
+    ]
     output_queue = multiprocessing.Queue()
-    procs = [multiprocessing.Process(target=func,
-                                     args=(chunk,) + args + (output_queue,))
-             for chunk in item_chunks]
+    procs = [
+        multiprocessing.Process(
+            target=func, args=(chunk, ) + args + (output_queue, ))
+        for chunk in item_chunks
+    ]
 
     for p in procs:
         p.start()
@@ -454,17 +494,20 @@ def list_parallelize(items, args, func):
 
     return list(ret)
 
+
 def parallel_morphological_dilate(pts, radius=2):
     """
     Perform morphological dilation in parallel across cpu_count() processes.
     """
-    return list_parallelize(pts, (radius,), morphological_dilate)
+    return list_parallelize(pts, (radius, ), morphological_dilate)
+
 
 def parallel_morphological_erode(pts, radius=2):
     """
     Perform morphological erosion in parallel across cpu_count() processes.
     """
     return list_parallelize(pts, (radius, pts), morphological_erode)
+
 
 def morphological_dilate(pts, radius=2, output_queue=None):
     """
@@ -479,7 +522,7 @@ def morphological_dilate(pts, radius=2, output_queue=None):
 
     for p in pts:
         for b in brush:
-            t = tuple_add(p, b)
+            t = TUPLE_ADD(p, b)
             new_pts.update([t])
 
     new_pts.update(pts)
@@ -487,6 +530,7 @@ def morphological_dilate(pts, radius=2, output_queue=None):
     if output_queue is not None:
         output_queue.put(ret)
     return ret
+
 
 def morphological_erode(pts, radius=2, all_pts=None, output_queue=None):
     """
@@ -504,7 +548,7 @@ def morphological_erode(pts, radius=2, all_pts=None, output_queue=None):
     orig_pts = dict([(p, True) for p in all_pts])
     for p in pts:
         for b in brush:
-            t = tuple_add(p, b)
+            t = TUPLE_ADD(p, b)
             if t not in orig_pts:
                 orig_pts[p] = False
                 break
@@ -513,6 +557,7 @@ def morphological_erode(pts, radius=2, all_pts=None, output_queue=None):
     if output_queue is not None:
         output_queue.put(ret)
     return ret
+
 
 def adjacency_vector(position, forward, points):
     """
@@ -525,10 +570,10 @@ def adjacency_vector(position, forward, points):
     # the vector satisfying this criteria
     adj = []
     for v in UNIT_VECTORS:
-        if tuple_dot(forward, v) != 0:
+        if TUPLE_DOT(forward, v) != 0:
             continue
         else:
-            p = tuple_add(position, v)
+            p = TUPLE_ADD(position, v)
             if p in points and points[p] == 0:
                 adj.append(v)
     if len(adj) == 1:
@@ -537,30 +582,32 @@ def adjacency_vector(position, forward, points):
     else:
         return None
 
+
 def slope_check_single(position, forward, points):
     """
     Given a single point and a forward direction, determine whether a slope is suitable
     in the given forward direction, and if so, what slope value. Add the resulting values
     to the points dictionary
     """
-    down_vec = adjacency_vector(tuple_add(position, forward), forward, points)
+    down_vec = adjacency_vector(TUPLE_ADD(position, forward), forward, points)
     if down_vec is None:
         return
     else:
-        up_vec = [v for v in UNIT_VECTORS if tuple_dot(v, down_vec) == -1][0]
+        up_vec = [v for v in UNIT_VECTORS if TUPLE_DOT(v, down_vec) == -1][0]
 
-    perpendicular_vectors = [v for v in UNIT_VECTORS if
-                             tuple_dot(v, forward) == 0 and v != down_vec]
+    perpendicular_vectors = [
+        v for v in UNIT_VECTORS if TUPLE_DOT(v, forward) == 0 and v != down_vec
+    ]
 
     # For each unit vector that is perpendicular to the forward vector, move up
     # to the maximum slope length along the forward vector, checking all around
     viable_slope = 0
-    for slope_length in range(1, max(VALID_SLOPES)+1):
+    for slope_length in range(1, max(VALID_SLOPES) + 1):
         # The 'base' position along the forward vector from the starting position
-        p = tuple_add(position, tuple_scale(slope_length, forward))
+        p = TUPLE_ADD(position, TUPLE_SCALE(slope_length, forward))
 
         # If there's no longer a full block adjacent to this position, break.
-        a = tuple_add(p, down_vec)
+        a = TUPLE_ADD(p, down_vec)
         if a not in points or points[a] != 0:
             viable_slope = slope_length - 1
             break
@@ -580,8 +627,8 @@ def slope_check_single(position, forward, points):
         for v in perpendicular_vectors:
             # The position to check is the position along the forward vector
             # plus the unit vector 'away'.
-            c = tuple_add(p, v)
-            
+            c = TUPLE_ADD(p, v)
+
             # If a neighbouring point is a slope, ignore it only consider full
             # blocks to cause interior corner issues.
             if c in points and points[c] == 0:
@@ -603,13 +650,15 @@ def slope_check_single(position, forward, points):
     chosen_slope = viable_slope
     clear_path = False
     while viable_slope > 0 and not clear_path:
-        chosen_slope = max([slope_length for slope_length in VALID_SLOPES
-                            if slope_length <= viable_slope])
+        chosen_slope = max([
+            slope_length for slope_length in VALID_SLOPES
+            if slope_length <= viable_slope
+        ])
         # Now, for each block along the forward vector, find if this chosen slope
         # conflicts with any other sloped blocks that existing along the forward
         # vector
-        for i in range(1, chosen_slope+1):
-            p = tuple_add(position, tuple_scale(i, forward))
+        for i in range(1, chosen_slope + 1):
+            p = TUPLE_ADD(position, TUPLE_SCALE(i, forward))
             # Gentler slopes take precendence, so if one is encountered, reduce
             # the viable slope length by one and try again. If this reduces it
             # below 1, then no slope is added.
@@ -624,11 +673,84 @@ def slope_check_single(position, forward, points):
     # sys.stderr.write("%d\n" % chosen_slope)
     # Now that the slope has been chosen, fill in the appropriate parts of the
     # points dict.
-    for i in range(1,chosen_slope+1):
-        p = tuple_add(position, tuple_scale(i, forward))
+    for i in range(1, chosen_slope + 1):
+        p = TUPLE_ADD(position, TUPLE_SCALE(i, forward))
         points[p] = ((chosen_slope, i), (forward, up_vec))
 
     return points
+
+
+def fill_corners(Points):
+    """
+    For a given set of points (dicitonary mapping coordinates to block type), find all unambiguous
+    places to place corner blocks.
+    """
+    corner_mapping = {
+        ((1, 1), (1, 1)): 'Corner'
+    }
+    # For a location to be valid for a corner filling, there needs to be exactly
+    # two adjacent blocks with appropriate orientations that are the same time.
+    offsets = [(i, j, k)
+               for i in (-1, 0, 1) for j in (-1, 0, 1) for k in (-1, 0, 1)
+               if abs(i) + abs(j) + abs(k) == 2]
+
+    # Iterate over all blocks in the object at this point, only considering slant
+    # blocks, and identify any where there is a candidate nearby.
+    corners = dict()
+    for coord, block in Points.iteritems():
+        # If it is a plain cube, skip it.
+        if block == 0:
+            continue
+
+        # Otherwise, look at all of the midpoints of the edges of the cube centred
+        # on this location for a block that is the same as this.
+        for offset in offsets:
+            other_coord = TUPLE_ADD(coord, offset)
+            other_block = Points.get(other_coord, None)
+            # If this point isn't there, or it is a cube, then move to the next offset.
+            if other_block is None or other_block == 0:
+                continue
+
+            # Otherwise, check to see that the slope type and the slope part
+            # match. Then check that the up vectors match. Then check that the
+            # forward vectors are perpendicular and cross to 
+            if block[0] == other_block[0] and \
+                block[1][1] == other_block[1][1] and \
+                TUPLE_DOT(block[1][0], other_block[1][0]) == 0:
+                corner_type = None
+                corner_coord = None
+                # Additional check for an interior closed-off corner:
+                #  - The two slopes need to have position+forward be equal.
+                if TUPLE_ADD(coord, block[1][0]) == TUPLE_ADD(other_coord, other_block[1][0]):
+                    corner_type = 'CutCorner'
+                    # For a closed off interior corner, the corner coordiante
+                    # is the position of one slope MINUS the forward direction
+                    # of the other slope.
+                    corner_coord = TUPLE_SUB(coord, other_block[1][0])
+
+                # Additional check for simple corner:
+                #  - The two slopes need to have position-forward be equal.
+                if TUPLE_SUB(coord, block[1][0]) == TUPLE_SUB(other_coord, other_block[1][0]):
+                    corner_type = ('Corner', block[0])
+                    # For a normal interior corner, the corner coordinate is
+                    # the position of one of the slopes plus the forward of
+                    # the other slope.
+                    corner_coord = TUPLE_ADD(coord, other_block[1][0])
+                
+                # If neither corner type was found, then do nothing.
+                if corner_type is None:
+                    continue
+                # If a corner type was found, ensure that the space is empty in
+                # the existing point set.
+                elif corner_coord not in Points:
+                    corners[corner_coord] = (
+                        corner_type,
+                        block[1]
+                    )
+
+    Points.update(corners)
+    return Points
+
 
 def smooth_pts(PointTriples):
     """
@@ -647,29 +769,61 @@ def smooth_pts(PointTriples):
 
     return pts
 
+
 def map_to_empyrion_codes(points):
     block_type_mapping = {
-        0: 0,
-        (2, 1): 18, (2, 2): 16, (1, 1): 20}
+        0: 0x0,
+        (1, 1): 0x14,
+        'CutCorner': 0x02,
+        ('Corner', (1, 1)): 0x0c,
+        (2, 1): 0x12,
+        (2, 2): 0x10,
+        ('Corner', (2, 1)): 0x08,
+        ('Corner', (2, 2)): 0x0a
+    }
     slope_code_mapping = {
-        177: ((0, 0, -1), (1, 0, 0)), 9: ((1, 0, 0), (0, 1, 0)), 137: ((1, 0, 0), (0, 0, -1)),
-        89: ((1, 0, 0), (0, 0, 1)), 33: ((0, 0, 1), (0, -1, 0)), 1: ((0, 0, 1), (0, 1, 0)),
-        97: ((0, 0, 1), (-1, 0, 0)), 81: ((0, -1, 0), (0, 0, 1)), 41: ((-1, 0, 0), (0, -1, 0)),
-        185: ((0, 1, 0), (1, 0, 0)), 105: ((0, 1, 0), (-1, 0, 0)), 129: ((0, 1, 0), (0, 0, -1)),
-        161: ((0, 0, 1), (1, 0, 0)), 25: ((-1, 0, 0), (0, 1, 0)), 153: ((-1, 0, 0), (0, 0, -1)),
-        73: ((-1, 0, 0), (0, 0, 1)), 49: ((0, 0, -1), (0, -1, 0)), 17: ((0, 0, -1), (0, 1, 0)),
-        113: ((0, 0, -1), (-1, 0, 0)), 65: ((0, 1, 0), (0, 0, 1)), 57: ((1, 0, 0), (0, -1, 0)),
-        169: ((0, -1, 0), (1, 0, 0)), 121: ((0, -1, 0), (-1, 0, 0)), 145: ((0, -1, 0), (0, 0, -1))}
-    slope_orientation_mapping = dict([(v, k) for k, v in slope_code_mapping.iteritems()])
+        177: ((0, 0, -1), (1, 0, 0)),
+        9: ((1, 0, 0), (0, 1, 0)),
+        137: ((1, 0, 0), (0, 0, -1)),
+        89: ((1, 0, 0), (0, 0, 1)),
+        33: ((0, 0, 1), (0, -1, 0)),
+        1: ((0, 0, 1), (0, 1, 0)),
+        97: ((0, 0, 1), (-1, 0, 0)),
+        81: ((0, -1, 0), (0, 0, 1)),
+        41: ((-1, 0, 0), (0, -1, 0)),
+        185: ((0, 1, 0), (1, 0, 0)),
+        105: ((0, 1, 0), (-1, 0, 0)),
+        129: ((0, 1, 0), (0, 0, -1)),
+        161: ((0, 0, 1), (1, 0, 0)),
+        25: ((-1, 0, 0), (0, 1, 0)),
+        153: ((-1, 0, 0), (0, 0, -1)),
+        73: ((-1, 0, 0), (0, 0, 1)),
+        49: ((0, 0, -1), (0, -1, 0)),
+        17: ((0, 0, -1), (0, 1, 0)),
+        113: ((0, 0, -1), (-1, 0, 0)),
+        65: ((0, 1, 0), (0, 0, 1)),
+        57: ((1, 0, 0), (0, -1, 0)),
+        169: ((0, -1, 0), (1, 0, 0)),
+        121: ((0, -1, 0), (-1, 0, 0)),
+        145: ((0, -1, 0), (0, 0, -1))
+    }
+    slope_orientation_mapping = dict(
+        [(v, k) for k, v in slope_code_mapping.iteritems()])
 
     blocks = []
     for position, block in points.iteritems():
-        blocks.append(position + (block_type_mapping[block[0] if block != 0 else 0],
-                                  slope_orientation_mapping[block[1]] if block != 0 else 1))
+        blocks.append(position + (block_type_mapping[block[
+            0] if block != 0 else 0], slope_orientation_mapping[block[1]]
+                                  if block != 0 else 1))
     return blocks
 
+
 def blocks_to_csv(blocks):
-    return ["{:d},{:d},{:d},{:d},{:d}".format(b[0], b[1], b[2], b[3], b[4]) for b in blocks]
+    return [
+        "{:d},{:d},{:d},{:d},{:d}".format(b[0], b[1], b[2], b[3], b[4])
+        for b in blocks
+    ]
+
 
 def dbm_bitmask(dbm, block_type="\x87"):
     block_strings = ""
@@ -709,8 +863,8 @@ def sparse_to_dense(positions, meta, l, w, h):
     Y = (w, 1)
     X = (h, 2)
 
-    a = [[[False for z in range(Z[0])] for y in range(Y[0])]
-         for x in range(X[0])]
+    a = [[[False for _ in range(Z[0])] for _ in range(Y[0])]
+         for _ in range(X[0])]
 
     for p, m in zip(positions, meta):
         P = [p[X[1]], p[Y[1]], p[Z[1]]]
@@ -766,6 +920,12 @@ def generate_blocks(positions, meta):
     #  > 0x14 = Slope 1:1 Solid
     #  > 0x12 = Slope 1:2 Top Solid
     #  > 0x10 = Slope 1:2 Bottom Solid
+    #  > 0x0c = Corner
+    #  > 0x0a = Corner D
+    #  > 0x08 = Corner C
+    #  > 0x06 = Corner B
+    #  > 0x04 = Corner A
+    #  > 0x02 = Cut Corner
     #  > 0x00 = Full Cube
     block_type = "\x87"
     block_rotation = "\x01"
@@ -804,7 +964,8 @@ def generate_blocks(positions, meta):
         for i in range(8):
             if b & (1 << i):
                 set_bits += 1
-    sys.stderr.write("%d bits set in header bytes for %d blocks.\n" % (set_bits, len(positions)))
+    sys.stderr.write("%d bits set in header bytes for %d blocks.\n" %
+                     (set_bits, len(positions)))
 
     # Step 4: Fill in the body/footer with steel blocks and whatever the footer represents.
     # We need to build a mapping of positions to order to look up the positions and
@@ -826,6 +987,7 @@ def generate_blocks(positions, meta):
 def csv_to_array(csv):
     return [[int(float(i)) for i in l.strip().split(",")]
             for l in csv.strip().split("\n")]
+
 
 def build_new_bp(bp_body, positions, bp_class):
     blueprint_class_mapping = {
