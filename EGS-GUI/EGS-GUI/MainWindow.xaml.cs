@@ -74,12 +74,15 @@ namespace EGS_GUI
         private void runBtn_Click(object sender, RoutedEventArgs e)
         {
             System.Diagnostics.Process proc = new System.Diagnostics.Process();
+            proc.EnableRaisingEvents = true;
+            proc.ErrorDataReceived += Proc_ErrorDataReceived;
+            proc.Exited += Proc_Exited;
             proc.StartInfo.RedirectStandardOutput = true;
             proc.StartInfo.RedirectStandardError = true;
             proc.StartInfo.UseShellExecute = false;
+
             proc.StartInfo.FileName = ".\\lambda_index.exe";
             string args = "";
-            args = "";
 
             // Ensure that the input STL file exists.
             if (System.IO.File.Exists(stlInputTxt.Text))
@@ -130,9 +133,30 @@ namespace EGS_GUI
             if (smoothingChk.IsChecked == false) { args += " --disable-smoothing"; }
 
             proc.StartInfo.Arguments = args;
+            commandOutputTxt.Text = "";
             proc.Start();
-            proc.WaitForExit();
-            commandOutputTxt.Text = proc.StandardError.ReadToEnd();
+            proc.BeginErrorReadLine();
+            runBtn.Content = "Running...";
+            runBtn.IsEnabled = false;
+            helpBtn.IsEnabled = false;
+        }
+
+        private void Proc_Exited(object sender, EventArgs e)
+        {
+            this.Dispatcher.Invoke(() =>
+            {
+                helpBtn.IsEnabled = true;
+                runBtn.IsEnabled = true;
+                runBtn.Content = "Run";
+            });
+        }
+
+        private void Proc_ErrorDataReceived(object sender, System.Diagnostics.DataReceivedEventArgs e)
+        {
+            this.Dispatcher.Invoke(() =>
+            {
+                commandOutputTxt.Text += e.Data + "\n";
+            });
         }
 
         private void helpBtn_Click(object sender, RoutedEventArgs e)
