@@ -20,6 +20,7 @@ class StderrFlusher(threading.Thread):
     Class that asynchronously flushes stderr ten times per second to ensure
     that output is emitted to the pipe in a timely fashion.
     """
+
     def __init__(self):
         threading.Thread.__init__(self)
         self.running = True
@@ -120,7 +121,7 @@ def lambda_handler(event, _):
                          str(time.time() - timer_start))
         sys.stderr.write("Morphological dilation expanded to %d points.\n" %
                          len(pts))
-        
+
         sys.stderr.write("Eroding voxel cloud...\n")
         timer_start = time.time()
         if empyrion.parallel() and not no_multithreading:
@@ -201,6 +202,7 @@ def blueprint_size(v):
             raise ValueError("Dimension size must be at least 1")
         return [dim, size]
 
+
 def version_check():
     """
     Check GitHub for the latest version tag, and the versio tag of this commit
@@ -213,14 +215,21 @@ def version_check():
         # twice.
         print "null"
         print "null"
-    
+
     if git_md['GitHub']:
-        if git_md['GitHubUser'] is not None and git_md['GitHubRepo'] is not None:
-            latest_release = json.loads(urllib2.urlopen("https://api.github.com/repos/%s/%s/releases/latest" % (git_md['GitHubUser'], git_md['GitHubRepo'])).read())
+        if git_md['GitHubUser'] is not None and git_md[
+                'GitHubRepo'] is not None:
+            latest_release = json.loads(
+                urllib2.urlopen(
+                    "https://api.github.com/repos/%s/%s/releases/latest" % (
+                        git_md['GitHubUser'], git_md['GitHubRepo'])).read())
             latest_tag = latest_release['tag_name']
 
             # Go through all of the tags to see if this commit matches a tag.
-            tags = json.loads(urllib2.urlopen("https://api.github.com/repos/%s/%s/git/refs/tags" % (git_md['GitHubUser'], git_md['GitHubRepo'])).read())
+            tags = json.loads(
+                urllib2.urlopen(
+                    "https://api.github.com/repos/%s/%s/git/refs/tags" % (
+                        git_md['GitHubUser'], git_md['GitHubRepo'])).read())
 
             current_tag = "Unreleased"
             for tag in tags:
@@ -337,8 +346,7 @@ def __main():
             help="""When specified, overrides all other behaviours and simply checks
             with GitHub to determine if this is the latest version or not. Always
             prints the current version on the first line, and the newest version
-            on the second line."""
-        )
+            on the second line.""")
         pargs = parser.parse_args()
 
         if pargs.version_check:

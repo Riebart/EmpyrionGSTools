@@ -5,6 +5,7 @@ import zipfile
 import StringIO
 import subprocess
 
+
 def git_md():
     """
     Subprocess out to git to get information about the repository including
@@ -13,8 +14,9 @@ def git_md():
     ret = dict()
     git_sha = subprocess.check_output(('git', 'rev-parse', 'HEAD'))
     ret['GitSHA'] = git_sha.strip()
-    
-    git_url = subprocess.check_output(('git', 'remote', 'get-url', '--all', 'origin')).lower()
+
+    git_url = subprocess.check_output(
+        ('git', 'remote', 'get-url', '--all', 'origin')).lower()
     # If the URL is GitHub, then parse out the 
     if git_url.startswith('git@github.com'):
         ret['GitHub'] = True
@@ -30,11 +32,12 @@ def git_md():
 
     return json.dumps(ret)
 
+
 def __main():
     # Run the pyinstaller process to rebuild the Python binary
     subprocess.check_call(
         ('pyinstaller', '--clean', '--onefile', 'lambda_index.py'))
-    
+
     sso = StringIO.StringIO()
     zfile = zipfile.ZipFile(sso, 'w', zipfile.ZIP_DEFLATED)
 
