@@ -17,13 +17,13 @@ def git_md():
 
     git_url = subprocess.check_output(
         ('git', 'remote', 'get-url', '--all', 'origin')).lower()
-    # If the URL is GitHub, then parse out the 
+    # If the URL is GitHub, then parse out the
     if git_url.startswith('git@github.com'):
         ret['GitHub'] = True
-        m = re.match("^git@github.com:(.*)/(.*).git$", git_url)
-        if m is not None:
-            ret['GitHubUser'] = m.group(1)
-            ret['GitHubRepo'] = m.group(2)
+        matches = re.match("^git@github.com:(.*)/(.*).git$", git_url)
+        if matches is not None:
+            ret['GitHubUser'] = matches.group(1)
+            ret['GitHubRepo'] = matches.group(2)
         else:
             ret['GitHubUser'] = None
             ret['GitHubRepo'] = None
