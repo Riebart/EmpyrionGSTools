@@ -8,8 +8,20 @@ import sys
 import time
 import base64
 import StringIO
+import threading
 
 import empyrion
+
+
+class StderrFlusher(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.running = True
+
+    def run(self):
+        while self.running:
+            sys.stderr.flush()
+            time.sleep(0.1)
 
 
 def lambda_handler(event, _):
@@ -17,6 +29,7 @@ def lambda_handler(event, _):
     Given a Lambda event body, ready the STL file and generate a new blueprint
     based on the parameters.
     """
+    operation_start = time.time()
     stl_body = base64.b64decode(event['STLBody'])
     disable_smoothing = event.get('DisableSmoothing', False)
     corner_blocks = event.get('CornerBlocks', False)
@@ -26,6 +39,7 @@ def lambda_handler(event, _):
     bp_class = event.get('BlueprintClass', 'SV')
     morphological_factors = event.get('MorphologicalFactors', None)
     hollow_radius = event.get('HollowRadius', None)
+    no_multithreading = event.get('NoMultithreading', False)
 
     with open('BlueprintBase/BlueprintBase.epb', 'r') as fp:
         bp_body = fp.read()
@@ -67,8 +81,9 @@ def lambda_handler(event, _):
     sys.stderr.write("Computed spatial resolution in model-space: %f\n" %
                      resolution)
 
+    sys.stderr.write("Splitting triangles...\n")
     timer_start = time.time()
-    if empyrion.parallel():
+    if empyrion.parallel() and not no_multithreading:
         pts = empyrion.parallel_split_tris(triangles, resolution)
     else:
         pts = empyrion.split_tris(triangles, resolution)
@@ -88,8 +103,9 @@ def lambda_handler(event, _):
                      str(time.time() - timer_start))
 
     if morphological_factors is not None:
+        sys.stderr.write("Dilating voxel cloud...\n")
         timer_start = time.time()
-        if empyrion.parallel():
+        if empyrion.parallel() and not no_multithreading:
             pts = empyrion.parallel_morphological_dilate(
                 pts, morphological_factors[0])
         else:
@@ -98,8 +114,10 @@ def lambda_handler(event, _):
                          str(time.time() - timer_start))
         sys.stderr.write("Morphological dilation expanded to %d points.\n" %
                          len(pts))
+        
+        sys.stderr.write("Eroding voxel cloud...\n")
         timer_start = time.time()
-        if empyrion.parallel():
+        if empyrion.parallel() and not no_multithreading:
             pts = empyrion.parallel_morphological_erode(
                 pts, morphological_factors[1])
         else:
@@ -110,6 +128,7 @@ def lambda_handler(event, _):
                          len(pts))
 
     if not disable_smoothing:
+        sys.stderr.write("Smoothing voxel cloud...\n")
         timer_start = time.time()
         smoothed_pts = empyrion.smooth_pts(pts)
         sys.stderr.write("Voxel smoothing took %s seconds.\n" %
@@ -130,8 +149,9 @@ def lambda_handler(event, _):
                           str(time.time() - timer_start)))
 
     if hollow_radius is not None:
+        sys.stderr.write("Hollowing voxel cloud...\n")
         timer_start = time.time()
-        if empyrion.parallel():
+        if empyrion.parallel() and not no_multithreading:
             passing_blocks = empyrion.hollow(smoothed_pts.keys(),
                                              hollow_radius)
         else:
@@ -148,6 +168,8 @@ def lambda_handler(event, _):
     sys.stderr.write("Blueprint generation took %s seconds.\n" %
                      str(time.time() - timer_start))
     sys.stderr.write("Resulting blueprint size: %d bytes\n" % len(new_bp))
+    sys.stderr.write("Voxelization operation took %s seconds.\n" %
+                     str(time.time() - operation_start))
 
     return base64.b64encode(new_bp)
 
@@ -252,6 +274,13 @@ def __main():
             default=False,
             help="""Whether or not corner blocks should be added when the choice and
             placement are unambiguous.""")
+        parser.add_argument(
+            "--disable-multithreading",
+            required=False,
+            default=False,
+            action='store_true',
+            help="""Force the use fo single-threaded code and disabeles the use of
+            multiprocessing modules even if they are available.""")
         pargs = parser.parse_args()
 
         if pargs.stl_file is not None:
@@ -290,9 +319,18 @@ def __main():
             'MorphologicalFactors':
             m_factors,
             'HollowRadius':
-            pargs.hollow_radius
+            pargs.hollow_radius,
+            'NoMultithreading':
+            pargs.disable_multithreading
         }
+
+        flusher = StderrFlusher()
+        flusher.start()
+
         new_bp_64 = lambda_handler(lambda_body, None)
+
+        flusher.running = False
+        flusher.join()
 
     if pargs is not None and pargs.blueprint_output_file is not None:
         with open(pargs.blueprint_output_file, 'wb') as fp:

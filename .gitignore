@@ -6,6 +6,7 @@ dist/*
 
 lambda_index.spec
 EGS-GUI/EGS-GUI/bin/*
+EGSTools/*
 
 *sln
 *pyproj

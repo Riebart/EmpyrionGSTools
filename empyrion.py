@@ -369,6 +369,8 @@ def split_tris(Primitives, Resolution, BatchSize=100, OutputQueue=None):
     triangle list. This limits the growth rate of the point and triangle list, significantly
     improving memory consumption.
     """
+    start_time = time.time()
+    last_print_time = time.time()
     pts = set()
     tris = []
     tris_handled = 0
@@ -378,6 +380,15 @@ def split_tris(Primitives, Resolution, BatchSize=100, OutputQueue=None):
         # the list of points at any given point in time bounded and reasonable.
         tris_handled += 1
         if (tris_handled % BatchSize) == 0:
+            if OutputQueue is None and time.time() - last_print_time > 0.5:
+                last_print_time = time.time()
+                sys.stderr.write("%d/%d (ETA: %f)\n" % 
+                (
+                    tris_handled,
+                    len(Primitives),
+                    (len(Primitives) - tris_handled) * (time.time() - start_time) / tris_handled
+                )
+            )
             # sys.stderr.write("Batch done (%d)\n" % tris_handled)
             pts.update([
                 rescale_round_point(t[i], Resolution)
@@ -448,6 +459,9 @@ def hollow(pts, radius=1, all_pts=None, output_queue=None):
     if len(brush) == 1:
         return pts
 
+    start_time = time.time()
+    last_print_time = time.time()
+    npts = 0
     orig_pts = dict([(p, False) for p in all_pts])
     for p in orig_pts.keys():
         for b in brush:
@@ -455,6 +469,14 @@ def hollow(pts, radius=1, all_pts=None, output_queue=None):
             if t not in orig_pts:
                 orig_pts[p] = True
                 break
+        npts += 1
+        if output_queue is None and time.time() - last_print_time > 0.5:
+            last_print_time = time.time()
+            sys.stderr.write("%d/%d (ETA: %f)\n" % (
+                npts,
+                len(pts),
+                (len(pts) - npts) * (time.time() - start_time) / npts
+            ))
 
     ret = [p for p, c in orig_pts.iteritems() if c]
     if output_queue is not None:
@@ -525,10 +547,21 @@ def morphological_dilate(pts, radius=2, output_queue=None):
         return pts
     new_pts = set()
 
+    start_time = time.time()
+    last_print_time = time.time()
+    npts = 0
     for p in pts:
         for b in brush:
             t = TUPLE_ADD(p, b)
             new_pts.update([t])
+        npts += 1
+        if output_queue is None and time.time() - last_print_time > 0.5:
+            last_print_time = time.time()
+            sys.stderr.write("%d/%d (ETA: %f)\n" % (
+                npts,
+                len(pts),
+                (len(pts) - npts) * (time.time() - start_time) / npts
+            ))
 
     new_pts.update(pts)
     ret = list(new_pts)
@@ -550,6 +583,9 @@ def morphological_erode(pts, radius=2, all_pts=None, output_queue=None):
     if len(brush) == 1:
         return pts
 
+    start_time = time.time()
+    last_print_time = time.time()
+    npts = 0
     orig_pts = dict([(p, True) for p in all_pts])
     for p in pts:
         for b in brush:
@@ -557,6 +593,14 @@ def morphological_erode(pts, radius=2, all_pts=None, output_queue=None):
             if t not in orig_pts:
                 orig_pts[p] = False
                 break
+        npts += 1
+        if output_queue is None and time.time() - last_print_time > 0.5:
+            last_print_time = time.time()
+            sys.stderr.write("%d/%d (ETA: %f)\n" % (
+                npts,
+                len(pts),
+                (len(pts) - npts) * (time.time() - start_time) / npts
+            ))
 
     ret = [p for p in pts if orig_pts[p]]
     if output_queue is not None:
@@ -766,11 +810,22 @@ def smooth_pts(PointTriples):
     # First, create a dict that maps from the points to the slope values
     pts = dict([(p, 0) for p in PointTriples])
 
+    start_time = time.time()
+    last_print_time = time.time()
+    npts = 0
     # For each point check along each unit vector to see if there are any blocks
     # that would make that direction an interior corner.
     for p in pts.keys():
         for v in UNIT_VECTORS:
             slope_check_single(p, v, pts)
+        npts += 1
+        if time.time() - last_print_time > 0.5:
+            last_print_time = time.time()
+            sys.stderr.write("%d/%d (ETA: %f)\n" % (
+                npts,
+                len(pts),
+                (len(pts) - npts) * (time.time() - start_time) / npts
+            ))
 
     return pts
 

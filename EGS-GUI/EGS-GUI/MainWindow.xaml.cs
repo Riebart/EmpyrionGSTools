@@ -80,6 +80,7 @@ namespace EGS_GUI
             proc.StartInfo.RedirectStandardOutput = true;
             proc.StartInfo.RedirectStandardError = true;
             proc.StartInfo.UseShellExecute = false;
+            proc.StartInfo.CreateNoWindow = true;
 
             proc.StartInfo.FileName = ".\\lambda_index.exe";
             string args = "";
@@ -156,6 +157,7 @@ namespace EGS_GUI
             this.Dispatcher.Invoke(() =>
             {
                 commandOutputTxt.Text += e.Data + "\n";
+                commandOutputTxt.ScrollToEnd();
             });
         }
 
@@ -165,6 +167,7 @@ namespace EGS_GUI
             proc.StartInfo.RedirectStandardOutput = true;
             proc.StartInfo.RedirectStandardError = true;
             proc.StartInfo.UseShellExecute = false;
+            proc.StartInfo.CreateNoWindow = true;
             proc.StartInfo.FileName = ".\\lambda_index.exe";
             proc.StartInfo.Arguments = "--help";
             proc.Start();
