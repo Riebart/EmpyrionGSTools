@@ -5,8 +5,10 @@ or a Lambda event body, and performs the necessary functions.
 """
 
 import sys
+import json
 import time
 import base64
+import urllib2
 import StringIO
 import threading
 
@@ -14,6 +16,10 @@ import empyrion
 
 
 class StderrFlusher(threading.Thread):
+    """
+    Class that asynchronously flushes stderr ten times per second to ensure
+    that output is emitted to the pipe in a timely fashion.
+    """
     def __init__(self):
         threading.Thread.__init__(self)
         self.running = True
@@ -175,6 +181,11 @@ def lambda_handler(event, _):
 
 
 def blueprint_size(v):
+    """
+    Parse a string as a blueprint size:
+    - Either an integer >= 1
+    - An integer in (1,2,3), a comma, an integer >= 1
+    """
     try:
         iv = int(v)
         if iv < 1:
@@ -189,6 +200,43 @@ def blueprint_size(v):
         if dim < 1:
             raise ValueError("Dimension size must be at least 1")
         return [dim, size]
+
+def version_check():
+    """
+    Check GitHub for the latest version tag, and the versio tag of this commit
+    """
+    try:
+        with open('git.json', 'r') as fp:
+            git_md = json.loads(fp.read())
+    except IOError:
+        # In the event that there is no git metadata, just print null values
+        # twice.
+        print "null"
+        print "null"
+    
+    if git_md['GitHub']:
+        if git_md['GitHubUser'] is not None and git_md['GitHubRepo'] is not None:
+            latest_release = json.loads(urllib2.urlopen("https://api.github.com/repos/%s/%s/releases/latest" % (git_md['GitHubUser'], git_md['GitHubRepo'])).read())
+            latest_tag = latest_release['tag_name']
+
+            # Go through all of the tags to see if this commit matches a tag.
+            tags = json.loads(urllib2.urlopen("https://api.github.com/repos/%s/%s/git/refs/tags" % (git_md['GitHubUser'], git_md['GitHubRepo'])).read())
+
+            current_tag = "Unreleased"
+            for tag in tags:
+                if tag['object']['sha'] == git_md['GitSHA']:
+                    current_tag = tag['ref'].split('/')[-1]
+
+            print current_tag
+            print latest_tag
+        else:
+            print "MissingGitHubDetails"
+            print "MissingGitHubDetails"
+    else:
+        # In the event that there is a git file, but it doesn't indicate GitHub
+        # then just print some stuff indicating that.
+        print "NonGitHub"
+        print "NonGitHub"
 
 
 def __main():
@@ -281,7 +329,21 @@ def __main():
             action='store_true',
             help="""Force the use fo single-threaded code and disabeles the use of
             multiprocessing modules even if they are available.""")
+        parser.add_argument(
+            "--version-check",
+            required=False,
+            default=False,
+            action='store_true',
+            help="""When specified, overrides all other behaviours and simply checks
+            with GitHub to determine if this is the latest version or not. Always
+            prints the current version on the first line, and the newest version
+            on the second line."""
+        )
         pargs = parser.parse_args()
+
+        if pargs.version_check:
+            version_check()
+            return
 
         if pargs.stl_file is not None:
             with open(pargs.stl_file, 'rb') as fp:

@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -11,6 +13,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
+using System.Net;
 using System.Windows.Shapes;
 using Microsoft.Win32;
 
@@ -21,11 +24,74 @@ namespace EGS_GUI
     /// </summary>
     public partial class MainWindow : Window
     {
+        //public dynamic read_api_json(string url)
+        //{
+        //    HttpWebRequest request = (HttpWebRequest)HttpWebRequest.Create(url);
+        //    request.UserAgent = "EmpyrionGSTools-GUI";
+        //    WebResponse response = request.GetResponse();
+        //    Stream rstream = response.GetResponseStream();
+        //    string json = "";
+        //    using (StreamReader sr = new StreamReader(rstream))
+        //    {
+        //        json = sr.ReadToEnd();
+        //    }
+        //    JavaScriptSerializer jss = new JavaScriptSerializer();
+        //    dynamic o = jss.Deserialize<Dictionary<string, object>>(json);
+        //    return o;
+        //}
+
+        public void check_release()
+        {
+            System.Diagnostics.Process proc = new System.Diagnostics.Process();
+            proc.EnableRaisingEvents = true;
+            proc.StartInfo.RedirectStandardOutput = true;
+            proc.StartInfo.RedirectStandardError = true;
+            proc.StartInfo.UseShellExecute = false;
+            proc.StartInfo.CreateNoWindow = true;
+            proc.StartInfo.FileName = ".\\lambda_index.exe";
+            proc.StartInfo.Arguments = "--version-check";
+            proc.Exited += VersionCheck_Exited;
+            proc.Start();
+        }
+
+        bool version_compare(string v1, string v2)
+        {
+            // Because semantic versioning is only three points, and the MS versioning is four, 
+            // add the missing component.
+            try
+            {
+                Version ver1 = new Version(v1 + ".0");
+                Version ver2 = new Version(v2 + ".0");
+                int cmp = ver2.CompareTo(ver1);
+                return (cmp > 0);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void VersionCheck_Exited(object sender, EventArgs e)
+        {
+            System.Diagnostics.Process proc = (System.Diagnostics.Process)sender;
+            string current_tag = proc.StandardOutput.ReadLine();
+            string latest_tag = proc.StandardOutput.ReadLine();
+
+            if ((latest_tag != "Unreleased") && version_compare(current_tag, latest_tag))
+            {
+                MessageBox.Show(
+                    String.Format("Newer version available.\n\nCurrent version: {0}\nLatest version: {1}",
+                    current_tag, latest_tag));
+            }
+        }
+
         public MainWindow()
         {
             InitializeComponent();
             hollowChk.IsChecked = true;
             morphChk.IsChecked = true;
+
+            check_release();
         }
 
         String browse_filessytem(TextBox sender)
