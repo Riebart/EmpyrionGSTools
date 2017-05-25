@@ -265,7 +265,8 @@ def __main():
     import json
     import argparse
 
-    if not sys.stdin.isatty():
+    # Don't attempt to read stdin on Windows.
+    if not sys.stdin.isatty() and sys.platform is not "win32":
         input_data = sys.stdin.read()
     else:
         input_data = None
