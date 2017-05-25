@@ -197,6 +197,14 @@ namespace EGS_GUI
                 args += " --hollow-radius=" + hollowTxt.Text;
             }
 
+            if (nilReflectRadio.IsChecked == false)
+            {
+                args += " --reflect=";
+                if (xReflectRadio.IsChecked == true) { args += "1"; }
+                if (yReflectRadio.IsChecked == true) { args += "2"; }
+                if (zReflectRadio.IsChecked == true) { args += "3"; }
+            }
+
             if (smoothingChk.IsChecked == false) { args += " --disable-smoothing"; }
 
             proc.StartInfo.Arguments = args;

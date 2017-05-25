@@ -49,7 +49,7 @@ def __main():
     zfile.write("BlueprintBase/BlueprintBase.epb")
     zfile.writestr("git.json", git_md())
     zfile.close()
-    with open("EGSTools.zip", "w") as fp:
+    with open("EGSTools.zip", "wb") as fp:
         fp.write(sso.getvalue())
 
 
