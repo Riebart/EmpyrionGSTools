@@ -37,6 +37,11 @@ Some common issues that arise:
 
 - A common issue is that the blueprints come out oriented incorrectly. I recommend using a small blueprint size (15 or so is usually good), and try different values for the dimension remapping parameter (`1,3,2` is one that is frequently useful). After each conversion, you need to reload a saved game, then spawn the BP into the game to see the changes. Do this until you find the right value to get the right orientation.
 - If you find that the blueprint is pointing the wrong way, but otherwise oriented correctly, use the dimension-mirror option. Again, try different values until you find the right one.
+- By default, this tool uses the SV/HV steel hull block for everything, which causes issues when generating CV blueprints. To address this, you can use the builtin `replaceblocks` command at the Empyrion in-game terminal:
+```
+replaceblocks <entity id> HullFull HullLargeFull
+```
+  - You can get the entity ID by using the `di` command at the terminal, and then looking at your newly imported ship.
 
 ## Parameter help
 
