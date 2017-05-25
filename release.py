@@ -50,7 +50,7 @@ def __main():
     zfile.writestr("git.json", git_md())
     zfile.close()
     with open("EGSTools.zip", "w") as fp:
-        fp.write(sys.stdout.write(sso.getvalue()))
+        fp.write(sso.getvalue())
 
 
 if __name__ == "__main__":
