@@ -39,8 +39,9 @@ Some common issues that arise:
 - If you find that the blueprint is pointing the wrong way, but otherwise oriented correctly, use the dimension-mirror option. Again, try different values until you find the right one.
 - By default, this tool uses the SV/HV steel hull block for everything, which causes issues when generating CV blueprints. To address this, you can use the builtin `replaceblocks` command at the Empyrion in-game terminal:
 ```
-replaceblocks <entity id> HullFull HullLargeFull
+replaceblocks <entity id> HullFull HullFullLarge
 ```
+  - For combat steel, since this tool produces exactly the exterior shell, use `HullCombatFullLarge`
   - You can get the entity ID by using the `di` command at the terminal, and then looking at your newly imported ship.
 
 ## Parameter help
