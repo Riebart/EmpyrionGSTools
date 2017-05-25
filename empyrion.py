@@ -29,8 +29,23 @@ VALID_SLOPES = [1, 2]
 TUPLE_DOT = lambda t1, t2: sum([a * b for a, b in zip(t1, t2)])
 TUPLE_ADD = lambda t1, t2: (t1[0] + t2[0], t1[1] + t2[1], t1[2] + t2[2])
 TUPLE_SUB = lambda t1, t2: (t1[0] - t2[0], t1[1] - t2[1], t1[2] - t2[2])
+TUPLE_MUL = lambda t1, t2: (t1[0] * t2[0], t1[1] * t2[1], t1[2] * t2[2])
 TUPLE_SCALE = lambda a, t: (a * t[0], a * t[1], a * t[2])
 
+SIGN_S = lambda s: -1 if s < 0 else 1 if s > 0 else 0
+SIGN_V = lambda v: tuple([SIGN_S(c) for c in v])
+
+def leq(a, b):
+    """
+    Given two values, return a boolean or None, depending on whether a < b, 
+    with a == b returning None.
+    """
+    if a < b:
+        return True
+    elif a > b:
+        return False
+    else:
+        return None
 
 class Triple(object):
     """
@@ -76,6 +91,17 @@ class Triple(object):
         self.x = Triple(*TUPLE_ADD(self.x, offset))
         self.y = Triple(*TUPLE_ADD(self.y, offset))
         self.z = Triple(*TUPLE_ADD(self.z, offset))
+
+    def reflect(self, dim):
+        scalar = [1 if i != dim else -1 for i in range(1, 3+1)]
+        if isinstance(self.x, Triple):
+            return Triple(
+                Triple(*TUPLE_MUL(self.x, scalar)),
+                Triple(*TUPLE_MUL(self.y, scalar)),
+                Triple(*TUPLE_MUL(self.z, scalar))
+            )
+        else:
+            return Triple(*TUPLE_MUL((self.x, self.y, self.x), scalar))
 
 
 class STLFile(object):
@@ -632,7 +658,7 @@ def adjacency_vector(position, forward, points):
         return None
 
 
-def slope_check_single(position, forward, points):
+def slope_check_single(position, forward, points, dim_weight=[1,2,4]):
     """
     Given a single point and a forward direction, determine whether a slope is suitable
     in the given forward direction, and if so, what slope value. Add the resulting values
@@ -704,18 +730,61 @@ def slope_check_single(position, forward, points):
             if slope_length <= viable_slope
         ])
         # Now, for each block along the forward vector, find if this chosen slope
-        # conflicts with any other sloped blocks that existing along the forward
+        # conflicts with any other sloped blocks that exist along the forward
         # vector
         for i in range(1, chosen_slope + 1):
             p = TUPLE_ADD(position, TUPLE_SCALE(i, forward))
             # Gentler slopes take precendence, so if one is encountered, reduce
             # the viable slope length by one and try again. If this reduces it
             # below 1, then no slope is added.
-            if p in points and points[p][0][0] > chosen_slope:
-                chosen_slope -= 1
-                viable_slope = chosen_slope
-                clear_path = False
-                break
+            #
+            # Perfer slopes away from the origin over slopes toward the origin.
+            # In the event that two slopes slope away from the origin in the same
+            # number of components, consider the dim_weight passed in.
+
+            # If a slope block already exists, only overwrite it if:
+            # - Ours points more away from the origin (forward)
+            # - Ours faces more away from the origin (up)
+            # - Ours is gentler
+
+            # If the location we're considering is occupied...
+            if p in points and points[p] is not None:
+                # If the one that exists is gentler than we are, we don't want to clobber it
+                test_slope = leq(points[p][0][0], chosen_slope)
+
+                if dim_weight is not None:
+                    p_weight = TUPLE_MUL(SIGN_V(p), dim_weight)
+
+                    # Only consider placing slopes that are at least as 'pointing away' as any
+                    # that already exist. This is True if ours points 'more away' than the other.
+                    test_forward = leq(TUPLE_DOT(p_weight, points[p][1][0]),
+                                       TUPLE_DOT(p_weight, forward))
+                    test_up = leq(TUPLE_DOT(p_weight, points[p][1][1]),
+                                  TUPLE_DOT(p_weight, up_vec))
+                else:
+                    test_forward = None
+                    test_up = None
+
+                # If all values are equal, then delete the block and return a non-clear path as this
+                # clearly can't be decided.
+                if test_forward is None and test_up is None and test_slope is None:
+                    points[p] = None
+                    chosen_slope -= 1
+                    viable_slope = chosen_slope
+                    clear_path = False
+                    break
+                # If this one is more forward, replace it.
+                # If this one is 'just as' forward, but more up, replace it.
+                # If this one is just as forward and up, but gentler, replace it.
+                elif test_slope or \
+                    (test_slope is None and test_forward) or \
+                    (test_slope is None and test_forward is None and test_up):
+                    clear_path = True
+                else:
+                    chosen_slope -= 1
+                    viable_slope = chosen_slope
+                    clear_path = False
+                    break
             else:
                 clear_path = True
 
@@ -731,7 +800,7 @@ def slope_check_single(position, forward, points):
 
 def fill_corners(Points):
     """
-    For a given set of points (dicitonary mapping coordinates to block type), find all unambiguous
+    For a given set of points (dictionary mapping coordinates to block type), find all unambiguous
     places to place corner blocks.
     """
     corner_mapping = {
@@ -827,6 +896,8 @@ def smooth_pts(PointTriples):
                 (len(pts) - npts) * (time.time() - start_time) / npts
             ))
 
+    # Throw away any points with a value of None
+    pts = dict([(k, v) for k, v in pts.iteritems() if v is not None])
     return pts
 
 

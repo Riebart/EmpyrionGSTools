@@ -39,6 +39,7 @@ def lambda_handler(event, _):
     operation_start = time.time()
     stl_body = base64.b64decode(event['STLBody'])
     disable_smoothing = event.get('DisableSmoothing', False)
+    reflect = event.get('Reflect', None)
     corner_blocks = event.get('CornerBlocks', False)
     voxel_dimension = event.get('BlueprintSize', 25)
     dim_remap = event.get('DimensionRemap', [1, 2, 3])
@@ -72,11 +73,22 @@ def lambda_handler(event, _):
     for t in triangles:
         t.shift(origin_offset)
 
-    # For clarity, show the transpose model bounds, which should be symmetric.
+    # For clarity, show the transposed model bounds, which should be symmetric.
     bounds = empyrion.triangle_list_bounds(triangles)
     sys.stderr.write("Translated model bounds: %s\n" % str(bounds))
 
-    # First, see if the voxel_dimension is s list, and if it isn't use the
+    if reflect is not None:
+        # If the reflection dimension is given, then duplicate all triangle, so that
+        # each triangle has a twin that is reflected in the given dimension.
+        duped_tris = []
+        for tri in triangles:
+            duped_tris.append(tri)
+            duped_tris.append(tri.reflect(reflect))
+        sys.stderr.write("Reflected all triangles: %d -> %d\n" %
+                         (len(triangles), len(duped_tris)))
+        triangles = duped_tris
+
+    # First, see if the voxel_dimension is a list, and if it isn't use the
     # longest dimension.
     if isinstance(voxel_dimension, list):
         dim, size = voxel_dimension
@@ -205,7 +217,7 @@ def blueprint_size(v):
 
 def version_check():
     """
-    Check GitHub for the latest version tag, and the versio tag of this commit
+    Check GitHub for the latest version tag, and the version tag of this commit
     """
     try:
         with open('git.json', 'r') as fp:
@@ -215,6 +227,7 @@ def version_check():
         # twice.
         print "null"
         print "null"
+        return
 
     if git_md['GitHub']:
         if git_md['GitHubUser'] is not None and git_md[
@@ -347,6 +360,15 @@ def __main():
             with GitHub to determine if this is the latest version or not. Always
             prints the current version on the first line, and the newest version
             on the second line.""")
+        parser.add_argument(
+            "--reflect",
+            required=False,
+            default=None,
+            type=int,
+            help="""When specified, the voxel cloud is sliced along the given dimension, and
+            the cloud is reflected to produce a perfectly symmetric cloud. Smoothing is performed
+            after this.
+            """)
         pargs = parser.parse_args()
 
         if pargs.version_check:
@@ -373,6 +395,8 @@ def __main():
         lambda_body = {
             'STLBody':
             base64.b64encode(input_data),
+            "Reflect":
+            pargs.reflect,
             'DisableSmoothing':
             pargs.disable_smoothing,
             'CornerBlocks':
