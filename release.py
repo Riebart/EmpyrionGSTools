@@ -36,7 +36,7 @@ def git_md():
 def __main():
     # Run the pyinstaller process to rebuild the Python binary
     subprocess.check_call(
-        ('pyinstaller', '--clean', '--onefile', 'lambda_index.py'))
+        ('pyinstaller.exe', '--clean', '--onefile', 'lambda_index.py'))
 
     sso = StringIO.StringIO()
     zfile = zipfile.ZipFile(sso, 'w', zipfile.ZIP_DEFLATED)
@@ -49,7 +49,8 @@ def __main():
     zfile.write("BlueprintBase/BlueprintBase.epb")
     zfile.writestr("git.json", git_md())
     zfile.close()
-    sys.stdout.write(sso.getvalue())
+    with open("EGSTools.zip", "w") as fp:
+        fp.write(sys.stdout.write(sso.getvalue()))
 
 
 if __name__ == "__main__":
