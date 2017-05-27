@@ -266,7 +266,7 @@ def __main():
     import argparse
 
     # Don't attempt to read stdin on Windows.
-    if not sys.stdin.isatty() and sys.platform is not "win32":
+    if not sys.stdin.isatty() and sys.platform != "win32":
         input_data = sys.stdin.read()
     else:
         input_data = None
