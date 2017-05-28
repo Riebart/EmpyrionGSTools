@@ -48,6 +48,7 @@ def lambda_handler(event, _):
     bp_class = event.get('BlueprintClass', 'SV')
     morphological_factors = event.get('MorphologicalFactors', None)
     hollow_radius = event.get('HollowRadius', None)
+    flood_hollow = event.get('FloodHollow', False)
     no_multithreading = event.get('NoMultithreading', False)
 
     with open('BlueprintBase/BlueprintBase.epb', 'r') as fp:
@@ -147,6 +148,22 @@ def lambda_handler(event, _):
         sys.stderr.write("Morphological erosion reduced to %d points.\n" %
                          len(pts))
 
+    if flood_hollow:
+        timer_start = time.time()
+        m, M = empyrion.bounding_box(pts)
+        length, width, height = empyrion.list_subtract(M, m)
+        length += 1
+        width += 1
+        height += 1
+        positions = [tuple(empyrion.list_subtract(p, m)) for p in pts]
+        dbm = empyrion.sparse_to_dense(positions, [(0, 1) for _ in range(len(positions))],
+                                       length, width, height)
+        sys.stderr.write("Performing flood-fill hollowing pass 1 (Removing interior cubes).\n")
+        n_positions = len(positions)
+        _, pts = empyrion.flood_hollow_dbm(dbm, positions)
+        sys.stderr.write("Flood-hollowing reduced from %d to %d blocks in %f seconds.\n" % (
+            n_positions, len(pts), time.time() - timer_start))
+
     if not disable_smoothing:
         sys.stderr.write("Smoothing voxel cloud...\n")
         timer_start = time.time()
@@ -184,7 +201,7 @@ def lambda_handler(event, _):
 
     timer_start = time.time()
     mapped_blocks = empyrion.map_to_empyrion_codes(smoothed_pts)
-    new_bp = empyrion.build_new_bp(bp_body, mapped_blocks, bp_class)
+    new_bp = empyrion.build_new_bp(bp_body, mapped_blocks, bp_class, flood_hollow)
     sys.stderr.write("Blueprint generation took %s seconds.\n" %
                      str(time.time() - timer_start))
     sys.stderr.write("Resulting blueprint size: %d bytes\n" % len(new_bp))
@@ -334,6 +351,16 @@ def __main():
             smoothing to hollow out filled interiors. Larger values result in thicker
             walls.""")
         parser.add_argument(
+            "--flood-hollow",
+            required=False,
+            default=False,
+            action='store_true',
+            help="""Perform flood-filling from the extents of the bounding box, and only
+            retain blocks that are touched by the exterior flood. Will produce gaps in the
+            resulting shell. Is performed after --hollow-radius and is useful for models that
+            are too large for, or have exterior details that are removed by, morphological
+            smoothing and subsequent hollowing with --hollow-radius.""")
+        parser.add_argument(
             "--disable-smoothing",
             required=False,
             default=False,
@@ -425,6 +452,8 @@ def __main():
             m_factors,
             'HollowRadius':
             pargs.hollow_radius,
+            'FloodHollow':
+            pargs.flood_hollow,
             'NoMultithreading':
             pargs.disable_multithreading
         }

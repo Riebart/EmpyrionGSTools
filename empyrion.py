@@ -15,14 +15,14 @@ import struct
 import StringIO
 import zipfile
 import multiprocessing
+from copy import copy
 
 # Maximum number of points to attempt to generate per process, for memory bounding
 # purposes.
 MAX_POINTS_PER_PROCESS = 2000.0
 
 # Build the list of unit vetors
-UNIT_VECTORS = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0,
-                                                                          -1)]
+UNIT_VECTORS = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0,-1)]
 # Valid slopes, expressed as 1/m = the number of blocks required to complete the slope.
 VALID_SLOPES = [1, 2]
 
@@ -30,6 +30,8 @@ TUPLE_DOT = lambda t1, t2: sum([a * b for a, b in zip(t1, t2)])
 TUPLE_ADD = lambda t1, t2: (t1[0] + t2[0], t1[1] + t2[1], t1[2] + t2[2])
 TUPLE_SUB = lambda t1, t2: (t1[0] - t2[0], t1[1] - t2[1], t1[2] - t2[2])
 TUPLE_MUL = lambda t1, t2: (t1[0] * t2[0], t1[1] * t2[1], t1[2] * t2[2])
+TUPLE_LE = lambda t1, t2: (t1[0] < t2[0]) and (t1[1] < t2[1]) and (t1[2] < t2[2])
+TI = lambda a, t: a[t[0]][t[1]][t[2]]
 TUPLE_SCALE = lambda a, t: (a * t[0], a * t[1], a * t[2])
 
 SIGN_S = lambda s: -1 if s < 0 else 1 if s > 0 else 0
@@ -1013,8 +1015,139 @@ def bounding_box(positions):
     M = [max([p[i] for p in positions]) for i in range(3)]
     return (m, M)
 
+def iterative_flood_fill(dbm, start, VisitedType):
+    """
+    Use a manual stack context to iteratively flood-fill the volume around the hull.
+    """
+    M = (len(dbm), len(dbm[0]), len(dbm[0][0]))
+    directions = UNIT_VECTORS
 
-def generate_blocks(positions, meta):
+    cur_pos = start
+    # Each item in the rail is a position, and the directions we have left to try starting at that
+    # position.
+    trail = [(cur_pos, copy(UNIT_VECTORS))]
+
+    # Prime the pump by testing the start, which is guaranteed to be in-bounds, but not guaranteed
+    # to be unoccupied or unvisited. If the position has been visited, but is unoccupied, then the
+    # value will be changed from False to None. If the position is occupied, then it will have a
+    # value that is neither False nor None.
+    if dbm[cur_pos[0]][cur_pos[1]][cur_pos[2]] == None:
+        return 0
+    elif isinstance(dbm[cur_pos[0]][cur_pos[1]][cur_pos[2]], VisitedType):
+        return 0
+    elif dbm[cur_pos[0]][cur_pos[1]][cur_pos[2]] != False:
+        dbm[cur_pos[0]][cur_pos[1]][cur_pos[2]] = VisitedType(
+            dbm[cur_pos[0]][cur_pos[1]][cur_pos[2]])
+        return 1
+
+    n_visits = 0
+    # While the trail still has items in it...
+    while len(trail) > 0:
+        # If the current position has no more places to move to, pop it off (we're done with it),
+        # move back to the previous position, and continue.
+        if len(trail[-1][1]) == 0:
+            trail.pop()
+            if len(trail) > 0:
+                cur_pos = trail[-1][0]
+        # If there are still directions to try from the current position...
+        else:
+            # Pop a direction
+            d = trail[-1][1].pop()
+            next_pos = TUPLE_ADD(cur_pos, d)
+
+            # Check to see if the next position is one of the following:
+            # - Is out of bounds in any component (in which case we do nothing and iterate)
+            if not TUPLE_LE((-1, -1, -1), next_pos) or not TUPLE_LE(next_pos, M):
+                pass
+            # - Is empty, but has been visited (in which case we don't move there): None
+            elif dbm[next_pos[0]][next_pos[1]][next_pos[2]] is None:
+                pass
+            # - Is occupied and has been visited (in which case we do nothing and iterate): (True,)
+            elif isinstance(dbm[next_pos[0]][next_pos[1]][next_pos[2]], VisitedType):
+                pass
+            # - Is occupied, but has not been visited (in which case we dont move there, and mark
+            #   if as occupied and visited): True
+            elif dbm[next_pos[0]][next_pos[1]][next_pos[2]] == False:
+                # If the tests pass, this becomes the new current position, so push it, and a
+                # fresh set of directions to try at this new position.
+                trail.append((next_pos, copy(UNIT_VECTORS)))
+                cur_pos = next_pos
+
+                # If we reach this point, then the current position should be marked as having been
+                # visited by the flood fill. This is distinguished from an unvisited location by
+                # being set to None as opposed to False.
+                #
+                # This line will only execute when visiting valid new empty spaces.
+                dbm[cur_pos[0]][cur_pos[1]][cur_pos[2]] = None
+            else:
+                n_visits += 1
+                dbm[next_pos[0]][next_pos[1]][next_pos[2]] = VisitedType(
+                    dbm[next_pos[0]][next_pos[1]][next_pos[2]])
+
+
+    return n_visits
+
+
+def flood_hollow_dbm(dbm, positions, test=lambda _: False):
+    """
+    Given a dense boolean matrix of which positions are filled, and the positions mapping, perform
+    a flood fill from every point on the exterior of the bounding box, and remove all positions
+    that aren't touched by the flood.
+    """
+    class __VisitedPosition:
+        def __init__(self, val):
+            self.val = val
+
+    # For each positions on the edge of the bounding box, start to run a flood.
+    # If the starting position is occupied, do nothing and move to the next.
+    # If the starting position has been filled by a previous flood, do nothing and move on.
+    x = len(dbm)
+    y = len(dbm[0])
+    z = len(dbm[0][0])
+
+    starting_positions = [
+        t for u in [[(0, j, k), (x-1, j, k)] for j in range(y) for k in range(z)] for t in u
+    ]
+    starting_positions += [
+        t for u in [[(i, 0, k), (i, y-1, k)] for i in range(x) for k in range(z)] for t in u
+    ]
+    starting_positions += [
+        t for u in [[(i, j, 0), (i, j, z-1)] for i in range(x) for j in range(y)] for t in u
+    ]
+    starting_positions = list(set(starting_positions))
+
+    for start in starting_positions:
+        iterative_flood_fill(dbm, start, __VisitedPosition)
+
+    # Now that we've flooded the exterior, go through and prune anything that wasn't touched in the
+    # flood. Also reset any point that was flooded but not originally filled to empty.
+    pruned_positions = set()
+    for i in range(x):
+        for j in range(y):
+            for k in range(z):
+                # Visited locations that were occupied will be set to (True, <original_value>), and
+                # this is exactly the set of locations that should be set to True; all others
+                # should be set to False
+                if isinstance(dbm[i][j][k], __VisitedPosition):
+                    dbm[i][j][k] = dbm[i][j][k].val
+                # The exception tot he above rule is the test parameter. If this evaluates to True
+                # on the value of a given position, then that position should be spared.
+                elif test(dbm[i][j][k]):
+                    pass
+                else:
+                    # If the position is True, then it was set, but not visited and should be
+                    # deleted.
+                    if dbm[i][j][k] not in (None, False):
+                        pruned_positions.add((k, j, i))
+                    dbm[i][j][k] = False
+
+    if isinstance(positions, list):
+        return dbm, [pos for pos in positions if tuple(pos) not in pruned_positions]
+    elif isinstance(positions, dict):
+        return dbm, dict([(pos, positions[pos]) for
+                          pos in [p for p in positions.keys() if p not in pruned_positions]])
+
+def generate_blocks(positions, meta, flood_hollow):
     # The string used for each block, corresponds to a steel cube.
     # The four bytes are (in order):
     # - Block type
@@ -1088,6 +1221,17 @@ def generate_blocks(positions, meta):
     # This just returns a dense True/False matrix, which needs to be serialized into a bitmask.
     dense_boolean_matrix = sparse_to_dense(positions, meta, length, width,
                                            height)
+    if flood_hollow:
+        sys.stderr.write("Performing flood-fill hollowing pass 2 (removing internal slopes).\n")
+        t0 = time.time()
+        n_positions = len(positions)
+        (dense_boolean_matrix,
+         positions) = flood_hollow_dbm(dense_boolean_matrix, positions,
+                                       lambda v: isinstance(v, tuple) and v == (0, 1))
+        t1 = time.time()
+        sys.stderr.write("Reduced from %d to %d blocks in %f seconds.\n" % (
+            n_positions, len(positions), t1 - t0))
+
     bm_list, block_strings = dbm_bitmask(dense_boolean_matrix, block_type)
     output += "".join([struct.pack('B', bm) for bm in bm_list])
     set_bits = 0
@@ -1120,7 +1264,7 @@ def csv_to_array(csv):
             for l in csv.strip().split("\n")]
 
 
-def build_new_bp(bp_body, positions, bp_class):
+def build_new_bp(bp_body, positions, bp_class, flood_hollow):
     blueprint_class_mapping = {
         "CV": chr(8),
         "BA": chr(2),
@@ -1129,7 +1273,7 @@ def build_new_bp(bp_body, positions, bp_class):
     }
 
     new_blocks, length, width, height = generate_blocks(
-        [tuple(p[:3]) for p in positions], [tuple(p[3:]) for p in positions])
+        [tuple(p[:3]) for p in positions], [tuple(p[3:]) for p in positions], flood_hollow)
 
     sso = StringIO.StringIO()
     zf = zipfile.ZipFile(sso, 'w', zipfile.ZIP_DEFLATED)
