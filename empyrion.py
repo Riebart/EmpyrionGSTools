@@ -69,6 +69,9 @@ class Triple(object):
     def __str__(self):
         return "<%s,%s,%s>" % (str(self.x), str(self.y), str(self.z))
 
+    def __repr__(self):
+        return str(self)
+
     def hexsect(self):
         """
         Given a triangle, partition it into six new triangles using the midpoints
@@ -634,7 +637,7 @@ def morphological_erode(pts, radius=2, all_pts=None, output_queue=None):
     return ret
 
 
-def adjacency_vector(position, forward, points):
+def adjacency_vectors(position, forward, points):
     """
     Return the vector that points out of what should be the bottom of any
     sloped blocks placed.
@@ -651,149 +654,146 @@ def adjacency_vector(position, forward, points):
             p = TUPLE_ADD(position, v)
             if p in points and points[p] == 0:
                 adj.append(v)
-    if len(adj) == 1:
-        # return [v for v in UNIT_VECTORS if tuple_dot(v, adj[0]) == -1]
-        return adj[0]
-    else:
-        return None
+    return [(vec, [v for v in UNIT_VECTORS if TUPLE_DOT(v, vec) == -1][0]) for vec in adj]
 
-
-def slope_check_single(position, forward, points, dim_weight=[1,2,4]):
+def slope_check_single(position, forward, points, aggressive=False, dim_weight=[1,2,4]):
     """
     Given a single point and a forward direction, determine whether a slope is suitable
     in the given forward direction, and if so, what slope value. Add the resulting values
     to the points dictionary
     """
-    down_vec = adjacency_vector(TUPLE_ADD(position, forward), forward, points)
-    if down_vec is None:
+    # In the case that the adjacency is ambiguous, try them all.
+    adjacencies = adjacency_vectors(TUPLE_ADD(position, forward), forward, points)
+    
+    # If we're not aggressively smoothing, and there's more than one adjacency, skip them
+    # as this is an interior corner.
+    if not aggressive and len(adjacencies) > 1:
         return
-    else:
-        up_vec = [v for v in UNIT_VECTORS if TUPLE_DOT(v, down_vec) == -1][0]
 
-    perpendicular_vectors = [
-        v for v in UNIT_VECTORS if TUPLE_DOT(v, forward) == 0 and v != down_vec
-    ]
+    for down_vec, up_vec in adjacencies:
+        perpendicular_vectors = [
+            v for v in UNIT_VECTORS if TUPLE_DOT(v, forward) == 0 and v != down_vec
+        ]
 
-    # For each unit vector that is perpendicular to the forward vector, move up
-    # to the maximum slope length along the forward vector, checking all around
-    viable_slope = 0
-    for slope_length in range(1, max(VALID_SLOPES) + 1):
-        # The 'base' position along the forward vector from the starting position
-        p = TUPLE_ADD(position, TUPLE_SCALE(slope_length, forward))
+        # For each unit vector that is perpendicular to the forward vector, move up
+        # to the maximum slope length along the forward vector, checking all around
+        viable_slope = 0
+        for slope_length in range(1, max(VALID_SLOPES) + 1):
+            # The 'base' position along the forward vector from the starting position
+            p = TUPLE_ADD(position, TUPLE_SCALE(slope_length, forward))
 
-        # If there's no longer a full block adjacent to this position, break.
-        a = TUPLE_ADD(p, down_vec)
-        if a not in points or points[a] != 0:
-            viable_slope = slope_length - 1
-            break
-
-        # If the position along the forward vector we're considering adding a block
-        # to is already filled with a full block (slope 0), then exit the loop and
-        # and see how far we got.
-        # Otherwise, if it's filled with a sloped block, keep going
-        if p in points and points[p] == 0:
-            viable_slope = slope_length - 1
-            break
-
-        # Is the position along the forward vector an interior position? Let's find out!
-        interior = False
-
-        # For each unit vector that is perpendicular to the forward vector...
-        for v in perpendicular_vectors:
-            # The position to check is the position along the forward vector
-            # plus the unit vector 'away'.
-            c = TUPLE_ADD(p, v)
-
-            # If a neighbouring point is a slope, ignore it only consider full
-            # blocks to cause interior corner issues.
-            if c in points and points[c] == 0:
-                interior = True
+            # If there's no longer a full block adjacent to this position, break.
+            a = TUPLE_ADD(p, down_vec)
+            if a not in points or points[a] != 0:
+                viable_slope = slope_length - 1
                 break
 
-        # if this is an interior point, then the viable slope is one less than
-        # as far as we've gone. Otherwise, the viable slope is as far as we've
-        # gone
-        if interior:
-            viable_slope = slope_length - 1
-            break
-        else:
-            viable_slope = slope_length
+            # If the position along the forward vector we're considering adding a block
+            # to is already filled with a full block (slope 0), then exit the loop and
+            # and see how far we got.
+            # Otherwise, if it's filled with a sloped block, keep going
+            if p in points and points[p] == 0:
+                viable_slope = slope_length - 1
+                break
 
-    # Once here, check the viable slope length, and find the longest slope
-    # in the VALID_SLOPES list that is no longer than this. If the viable slope
-    # isn't at least 1, then there's nothing to do.
-    chosen_slope = viable_slope
-    clear_path = False
-    while viable_slope > 0 and not clear_path:
-        chosen_slope = max([
-            slope_length for slope_length in VALID_SLOPES
-            if slope_length <= viable_slope
-        ])
-        # Now, for each block along the forward vector, find if this chosen slope
-        # conflicts with any other sloped blocks that exist along the forward
-        # vector
+            # Is the position along the forward vector an interior position? Let's find out!
+            interior = False
+
+            # For each unit vector that is perpendicular to the forward vector...
+            for v in perpendicular_vectors:
+                # The position to check is the position along the forward vector
+                # plus the unit vector 'away'.
+                c = TUPLE_ADD(p, v)
+
+                # If a neighbouring point is a slope, ignore it only consider full
+                # blocks to cause interior corner issues.
+                if c in points and points[c] == 0:
+                    interior = True
+                    break
+
+            # if this is an interior point, then the viable slope is one less than
+            # as far as we've gone. Otherwise, the viable slope is as far as we've
+            # gone
+            if interior and not aggressive:
+                viable_slope = slope_length - 1
+                break
+            else:
+                viable_slope = slope_length
+
+        # Once here, check the viable slope length, and find the longest slope
+        # in the VALID_SLOPES list that is no longer than this. If the viable slope
+        # isn't at least 1, then there's nothing to do.
+        chosen_slope = viable_slope
+        clear_path = False
+        while viable_slope > 0 and not clear_path:
+            chosen_slope = max([
+                slope_length for slope_length in VALID_SLOPES
+                if slope_length <= viable_slope
+            ])
+            # Now, for each block along the forward vector, find if this chosen slope
+            # conflicts with any other sloped blocks that exist along the forward
+            # vector
+            for i in range(1, chosen_slope + 1):
+                p = TUPLE_ADD(position, TUPLE_SCALE(i, forward))
+                # Gentler slopes take precendence, so if one is encountered, reduce
+                # the viable slope length by one and try again. If this reduces it
+                # below 1, then no slope is added.
+                #
+                # Perfer slopes away from the origin over slopes toward the origin.
+                # In the event that two slopes slope away from the origin in the same
+                # number of components, consider the dim_weight passed in.
+
+                # If a slope block already exists, only overwrite it if:
+                # - Ours points more away from the origin (forward)
+                # - Ours faces more away from the origin (up)
+                # - Ours is gentler
+
+                # If the location we're considering is occupied...
+                if p in points and points[p] is not None:
+                    # If the one that exists is gentler than we are, we don't want to clobber it
+                    test_slope = leq(points[p][0][0], chosen_slope)
+
+                    if dim_weight is not None:
+                        p_weight = TUPLE_MUL(SIGN_V(p), dim_weight)
+                        # Only consider placing slopes that are at least as 'pointing away' as any
+                        # that already exist. This is True if ours points 'more away' than the other
+                        test_forward = leq(TUPLE_DOT(p_weight, points[p][1][0]),
+                                           TUPLE_DOT(p_weight, forward))
+                        test_up = leq(TUPLE_DOT(p_weight, points[p][1][1]),
+                                      TUPLE_DOT(p_weight, up_vec))
+                    else:
+                        test_forward = None
+                        test_up = None
+
+                    # If all values are equal delete the block and return a non-clear path as this
+                    # clearly can't be decided.
+                    if test_forward is None and test_up is None and test_slope is None:
+                        points[p] = None
+                        chosen_slope -= 1
+                        viable_slope = chosen_slope
+                        clear_path = False
+                        break
+                    # If this one is more forward, replace it.
+                    # If this one is 'just as' forward, but more up, replace it.
+                    # If this one is just as forward and up, but gentler, replace it.
+                    elif test_slope or \
+                        (test_slope is None and test_forward) or \
+                        (test_slope is None and test_forward is None and test_up):
+                        clear_path = True
+                    else:
+                        chosen_slope -= 1
+                        viable_slope = chosen_slope
+                        clear_path = False
+                        break
+                else:
+                    clear_path = True
+
+        # sys.stderr.write("%d\n" % chosen_slope)
+        # Now that the slope has been chosen, fill in the appropriate parts of the
+        # points dict.
         for i in range(1, chosen_slope + 1):
             p = TUPLE_ADD(position, TUPLE_SCALE(i, forward))
-            # Gentler slopes take precendence, so if one is encountered, reduce
-            # the viable slope length by one and try again. If this reduces it
-            # below 1, then no slope is added.
-            #
-            # Perfer slopes away from the origin over slopes toward the origin.
-            # In the event that two slopes slope away from the origin in the same
-            # number of components, consider the dim_weight passed in.
-
-            # If a slope block already exists, only overwrite it if:
-            # - Ours points more away from the origin (forward)
-            # - Ours faces more away from the origin (up)
-            # - Ours is gentler
-
-            # If the location we're considering is occupied...
-            if p in points and points[p] is not None:
-                # If the one that exists is gentler than we are, we don't want to clobber it
-                test_slope = leq(points[p][0][0], chosen_slope)
-
-                if dim_weight is not None:
-                    p_weight = TUPLE_MUL(SIGN_V(p), dim_weight)
-
-                    # Only consider placing slopes that are at least as 'pointing away' as any
-                    # that already exist. This is True if ours points 'more away' than the other.
-                    test_forward = leq(TUPLE_DOT(p_weight, points[p][1][0]),
-                                       TUPLE_DOT(p_weight, forward))
-                    test_up = leq(TUPLE_DOT(p_weight, points[p][1][1]),
-                                  TUPLE_DOT(p_weight, up_vec))
-                else:
-                    test_forward = None
-                    test_up = None
-
-                # If all values are equal, then delete the block and return a non-clear path as this
-                # clearly can't be decided.
-                if test_forward is None and test_up is None and test_slope is None:
-                    points[p] = None
-                    chosen_slope -= 1
-                    viable_slope = chosen_slope
-                    clear_path = False
-                    break
-                # If this one is more forward, replace it.
-                # If this one is 'just as' forward, but more up, replace it.
-                # If this one is just as forward and up, but gentler, replace it.
-                elif test_slope or \
-                    (test_slope is None and test_forward) or \
-                    (test_slope is None and test_forward is None and test_up):
-                    clear_path = True
-                else:
-                    chosen_slope -= 1
-                    viable_slope = chosen_slope
-                    clear_path = False
-                    break
-            else:
-                clear_path = True
-
-    # sys.stderr.write("%d\n" % chosen_slope)
-    # Now that the slope has been chosen, fill in the appropriate parts of the
-    # points dict.
-    for i in range(1, chosen_slope + 1):
-        p = TUPLE_ADD(position, TUPLE_SCALE(i, forward))
-        points[p] = ((chosen_slope, i), (forward, up_vec))
+            points[p] = ((chosen_slope, i), (forward, up_vec))
 
     return points
 
@@ -854,7 +854,7 @@ def fill_corners(Points):
                     # the position of one of the slopes plus the forward of
                     # the other slope.
                     corner_coord = TUPLE_ADD(coord, other_block[1][0])
-                
+
                 # If neither corner type was found, then do nothing.
                 if corner_type is None:
                     continue
@@ -870,7 +870,7 @@ def fill_corners(Points):
     return Points
 
 
-def smooth_pts(PointTriples):
+def smooth_pts(PointTriples, aggressive=False):
     """
     Given a collection of points (assumed to be cubic voxels), identify and build
     the list of slanted/sloped voxel elements that will help smooth out the voxel
@@ -886,7 +886,7 @@ def smooth_pts(PointTriples):
     # that would make that direction an interior corner.
     for p in pts.keys():
         for v in UNIT_VECTORS:
-            slope_check_single(p, v, pts)
+            slope_check_single(p, v, pts, aggressive)
         npts += 1
         if time.time() - last_print_time > 0.5:
             last_print_time = time.time()

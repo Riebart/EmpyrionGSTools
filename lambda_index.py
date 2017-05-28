@@ -39,6 +39,7 @@ def lambda_handler(event, _):
     operation_start = time.time()
     stl_body = base64.b64decode(event['STLBody'])
     disable_smoothing = event.get('DisableSmoothing', False)
+    aggressive_smoothing = event.get('AggressiveSmoothing', False)
     reflect = event.get('Reflect', None)
     corner_blocks = event.get('CornerBlocks', False)
     voxel_dimension = event.get('BlueprintSize', 25)
@@ -149,7 +150,7 @@ def lambda_handler(event, _):
     if not disable_smoothing:
         sys.stderr.write("Smoothing voxel cloud...\n")
         timer_start = time.time()
-        smoothed_pts = empyrion.smooth_pts(pts)
+        smoothed_pts = empyrion.smooth_pts(pts, aggressive_smoothing)
         sys.stderr.write("Voxel smoothing took %s seconds.\n" %
                          str(time.time() - timer_start))
         sys.stderr.write("Smoothed %d voxels into %d blocks.\n" %
@@ -340,6 +341,13 @@ def __main():
             help="""Disable the addition of slanted or other non-cube blocks to the
             resulting voxel model.""")
         parser.add_argument(
+            "--aggressive-smoothing",
+            required=False,
+            default=False,
+            action='store_true',
+            help="""Aggressively add sloped blocks, even on interior corners where conflicts
+            may cause ambiguities and asymmetry.""")
+        parser.add_argument(
             "--corner-blocks",
             action='store_true',
             default=False,
@@ -400,6 +408,8 @@ def __main():
             pargs.reflect,
             'DisableSmoothing':
             pargs.disable_smoothing,
+            'AggressiveSmoothing':
+            pargs.aggressive_smoothing,
             'CornerBlocks':
             pargs.corner_blocks,
             'DimensionRemap':
